@@ -2,14 +2,6 @@ const $ = selector => document.querySelector(selector)
 const socket = io('http://localhost:7569');
 let start = false
 
-// const $count = $('#count')
-// const $button = $('button')
-
-// $button.addEventListener('click', () => {
-//   const count = +$count.innerHTML
-//   $count.innerHTML = (count + 1).toString()
-// })
-
 const generateRandomID = (length) => {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let randomID = '';
@@ -20,13 +12,6 @@ const generateRandomID = (length) => {
   return randomID;
 }
 
-// window.electronAPI.onUpdateTheme((event, theme) => {
-//   const root = document.documentElement
-//   const header = document.getElementById('header')
-//   console.log({ theme })
-//   root.style.setProperty('--scheme', theme)
-//   header.style.setProperty('color', 'white')
-// })
 
 let downloadProcess = [];
 

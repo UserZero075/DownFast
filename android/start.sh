@@ -7,7 +7,7 @@ fi
 
 if [ ! -f "servidor.zip" ]; then
     echo "Descargando servidor.zip..."
-    wget https://github.com/UserZero075/DownFast/blob/main/android/servidor.zip
+    wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/servidor.zip
     unzip servidor.zip
 fi
 

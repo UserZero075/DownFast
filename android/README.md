@@ -1,8 +1,8 @@
 # DownFast
 
-DownFast es una aplicación que te permite descargar archivos de manera rápida y eficiente de la nube UO (actualmente en fase beta). Además de su versión principal para escritorio, DownFast también está disponible para dispositivos Android.
+DownFast es una herramienta que te permite descargar archivos de manera rápida y eficiente de la nube UO (actualmente en fase beta). Además de su versión principal para escritorio, DownFast también está disponible en su version web.
 
-Para habilitar el servidor interno en la versión de Android, se recomienda utilizar Termux, una aplicación de emulación de terminal para Android. A través de Termux, podrás configurar el servidor interno necesario para el correcto funcionamiento de la aplicación.
+Para habilitar el servidor interno en la versión web para su uso en Android, se recomienda utilizar Termux, una aplicación de emulación de terminal para Android. A través de Termux, podrás configurar el servidor interno necesario para el correcto funcionamiento de la web.
 
 ## Instrucciones
 

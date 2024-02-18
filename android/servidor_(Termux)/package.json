@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "axios-progressfy": "^1.1.8"
+  }
+}

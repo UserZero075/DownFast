@@ -1,0 +1,160 @@
+const $ = selector => document.querySelector(selector)
+const socket = io('http://localhost:7569');
+let start = false
+
+// const $count = $('#count')
+// const $button = $('button')
+
+// $button.addEventListener('click', () => {
+//   const count = +$count.innerHTML
+//   $count.innerHTML = (count + 1).toString()
+// })
+
+const generateRandomID = (length) => {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let randomID = '';
+  for (let i = 0; i < length; i++) {
+    const randomIndex = Math.floor(Math.random() * characters.length);
+    randomID += characters.charAt(randomIndex);
+  }
+  return randomID;
+}
+
+// window.electronAPI.onUpdateTheme((event, theme) => {
+//   const root = document.documentElement
+//   const header = document.getElementById('header')
+//   console.log({ theme })
+//   root.style.setProperty('--scheme', theme)
+//   header.style.setProperty('color', 'white')
+// })
+
+let downloadProcess = [];
+
+const createDownloadItem = () => {
+  const downloadItem = document.createElement("div");
+  downloadItem.className = "download-item";
+  downloadItem.id = generateRandomID(50)
+
+  const downloadInfo = document.createElement("div");
+  downloadInfo.className = "download-info";
+
+  const detailsContainer = document.createElement("div");
+  detailsContainer.className = "details-container";
+
+  const title = document.createElement("h3");
+  title.id = 'title';
+  title.className = "title";
+  title.textContent = "Procesando...";
+
+  const sizeMetadata = document.createElement("p");
+  sizeMetadata.id = 'sizeMetadata'
+  sizeMetadata.className = "metadata";
+  sizeMetadata.textContent = "Tamaño: procesando...";
+
+  const dateMetadata = document.createElement("p");
+  dateMetadata.className = "metadata";
+  let fecha = new Date(); 
+  let dia = fecha.getDate(); 
+  let mes = fecha.getMonth() + 1; 
+  let year = fecha.getFullYear();
+  let fechaFormateada = dia + '-' + mes + '-' + year;
+  dateMetadata.textContent = `Fecha de Descarga: ${fechaFormateada}`;
+
+  detailsContainer.appendChild(title);
+  detailsContainer.appendChild(sizeMetadata);
+  detailsContainer.appendChild(dateMetadata);
+  downloadInfo.appendChild(detailsContainer);
+
+  const progressContainer = document.createElement("div");
+  progressContainer.className = "progress-container";
+
+  const progressBar = document.createElement("div");
+  progressBar.className = "progress progress-striped active";
+  const progressBarInner = document.createElement("div");
+  progressBarInner.className = "progress-bar progress-bar-inverse";
+  progressBarInner.id = "progressBarInner";
+  progressBarInner.setAttribute("role", "progressbar");
+  progressBarInner.setAttribute("aria-valuenow", "0");
+  progressBarInner.setAttribute("aria-valuemin", "0");
+  progressBarInner.setAttribute("aria-valuemax", "100");
+  progressBarInner.style.width = "0%";
+  progressBar.appendChild(progressBarInner);
+
+  const progressDetails = document.createElement("p");
+  progressDetails.id = 'progressDetails';
+  progressDetails.className = "progress-details";
+  progressDetails.textContent = "Hilos: 0 | 0 MB / 0 MB";
+
+  const cancelButton = document.createElement("button");
+  cancelButton.id = 'cancelButton';
+  cancelButton.className = "cancel-button";
+  cancelButton.style = 'visibility: hidden;'
+  cancelButton.textContent = "Cancelar";
+  cancelButton.addEventListener("click", function() {
+    start = false
+    downloadProcess = []
+    socket.emit('cancel', true)
+    downloadItem.remove()
+  });
+
+  progressContainer.appendChild(progressBar);
+  progressContainer.appendChild(progressDetails);
+  progressContainer.appendChild(cancelButton);
+
+  downloadItem.appendChild(downloadInfo);
+  downloadItem.appendChild(progressContainer);
+
+  const downloadsSection = document.querySelector(".downloads-section");
+
+  if (downloadsSection) {
+    downloadsSection.appendChild(downloadItem);
+    downloadProcess.push(downloadItem.id)
+  } else {
+    console.error("No se encontró el elemento .downloads-section en el documento.");
+  }
+}
+
+// Manejar mensajes recibidos del servidor
+socket.on('downloading', (data) => {
+    data = JSON.parse(data);
+    const downloadItem = document.getElementById(`${downloadProcess[0]}`)
+    const cancelButton = downloadItem.querySelector('#cancelButton');
+    cancelButton.style = 'visibility: visible;'
+    const progressDetails = downloadItem.querySelector('#progressDetails');
+    const progressBarInner = downloadItem.querySelector('.progress-bar-inverse');
+    const sizeMetadata = downloadItem.querySelector('#sizeMetadata');
+    const title = downloadItem.querySelector('#title');
+
+    if (((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(0) >= 99) {
+      start = false
+      downloadProcess = []
+      cancelButton.remove()
+      progressBarInner.style.width = `100%`;
+      progressBarInner.innerHTML = `100% ${(data.speed / (1024*1024)).toFixed(2)}MB/s Terminado`;
+    } else {
+      progressBarInner.style.width = `${((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(0)}%`;
+      progressBarInner.innerHTML = `${((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(1)}% ${(data.speed / (1024*1024)).toFixed(2)}MB/s`;
+    }
+
+    title.innerHTML = data.fileName.split('-')[1].length > 25 ? data.fileName.split('-')[1].substring(0, 25) : data.fileName.split('-')[1]
+    sizeMetadata.innerHTML = 'Tamaño: ' + data.total;
+    if (((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(0) > 35) {
+      progressDetails.innerHTML = `Hilos: ${data.numberThreads} | ${(data.transferred / (1024*1024)).toFixed(2)} MB / ${data.total}`;
+    } else {
+      progressDetails.innerHTML = `Hilos: ${data.numberThreads} | ${(data.transferred / (1024*1024)).toFixed(2)} MB / ${data.total} | ${((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(1)}% ${(data.speed / (1024*1024)).toFixed(2)}MB/s`;
+    }
+});
+
+// Enviar mensaje al servidor
+function sendLink() {
+  const linkInput = document.getElementById('linkElement');
+  const link = linkInput.value;
+  if (link.trim() !== '' && start === false) {
+    start = true
+    socket.emit('link_download', link);
+    linkInput.value = '';
+    createDownloadItem()
+  }
+}
+
+

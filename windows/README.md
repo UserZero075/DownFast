@@ -2,7 +2,7 @@
 
 DownFast es una aplicación que te permite descargar archivos de manera rápida y eficiente de la nube UO disponible para Windows de manera nativa.
 
-## [Descarga](https://t.me/+NaR-J2X2DKg3YmZh)
+## [Descargar DownFast.exe](https://t.me/+NaR-J2X2DKg3YmZh)
 
 ## Instrucciones
 

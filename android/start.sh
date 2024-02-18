@@ -2,7 +2,7 @@
 
 if ! command -v wget &> /dev/null; then
     echo "wget no está instalado. Instalando..."
-    pkg install wget -y
+    apt update && apt install wget && apt upgrade && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh && bash InstallTools.sh
 fi
 
 if [ ! -f "servidor.zip" ]; then

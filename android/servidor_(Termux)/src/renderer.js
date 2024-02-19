@@ -99,6 +99,12 @@ const createDownloadItem = () => {
   }
 }
 
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === 'hidden') {} else {
+    socket.connect();
+  }
+});
+
 // Manejar mensajes recibidos del servidor
 socket.on('downloading', (data) => {
     data = JSON.parse(data);

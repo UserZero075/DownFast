@@ -1,6 +1,27 @@
 const $ = selector => document.querySelector(selector)
 const socket = io('http://localhost:7569');
-let start = false
+let start
+let downloadItem;
+let downloadProcess;
+let storedDownloadProcess = localStorage.getItem('downloadProcess');
+let startedDownloadProcess = localStorage.getItem('start');
+
+if (storedDownloadProcess) {
+  if (startedDownloadProcess === 'false') {
+    start = false
+    downloadProcess = []
+  } else { 
+    if (JSON.parse(storedDownloadProcess).length >= 2) {
+      localStorage.setItem('start', 'false');
+      downloadProcess = []
+    } else {
+      downloadProcess = JSON.parse(storedDownloadProcess);
+    }
+  }
+} else {
+  downloadProcess = [];
+}
+start = localStorage.getItem('start')
 
 const generateRandomID = (length) => {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -12,13 +33,10 @@ const generateRandomID = (length) => {
   return randomID;
 }
 
-
-let downloadProcess = [];
-
-const createDownloadItem = () => {
+const createDownloadItem = (id) => {
   const downloadItem = document.createElement("div");
   downloadItem.className = "download-item";
-  downloadItem.id = generateRandomID(50)
+  downloadItem.id = id
 
   const downloadInfo = document.createElement("div");
   downloadInfo.className = "download-info";
@@ -77,6 +95,7 @@ const createDownloadItem = () => {
   cancelButton.textContent = "Cancelar";
   cancelButton.addEventListener("click", function() {
     start = false
+    localStorage.setItem('start', 'false');
     downloadProcess = []
     socket.emit('cancel', true)
     downloadItem.remove()
@@ -94,6 +113,8 @@ const createDownloadItem = () => {
   if (downloadsSection) {
     downloadsSection.appendChild(downloadItem);
     downloadProcess.push(downloadItem.id)
+    localStorage.setItem('downloadProcess', JSON.stringify(downloadProcess));
+    console.log(localStorage)
   } else {
     console.error("No se encontró el elemento .downloads-section en el documento.");
   }
@@ -104,48 +125,75 @@ document.addEventListener("visibilitychange", function() {
     socket.connect();
   }
 });
+let i = 0
 
-// Manejar mensajes recibidos del servidor
 socket.on('downloading', (data) => {
-    data = JSON.parse(data);
-    const downloadItem = document.getElementById(`${downloadProcess[0]}`)
-    const cancelButton = downloadItem.querySelector('#cancelButton');
-    cancelButton.style = 'visibility: visible;'
-    const progressDetails = downloadItem.querySelector('#progressDetails');
-    const progressBarInner = downloadItem.querySelector('.progress-bar-inverse');
-    const sizeMetadata = downloadItem.querySelector('#sizeMetadata');
-    const title = downloadItem.querySelector('#title');
+  console.log('ds')
+  data = JSON.parse(data);
+  if (localStorage.getItem('startDownload').length > 10 && i === 0) {
+    i++
+    createDownloadItem(localStorage.getItem('startDownload'))
+    downloadItem = document.getElementById(`${localStorage.getItem('startDownload')}`)
+  } else {
+    downloadItem = document.getElementById(`${downloadProcess[0]}`)
+  }
+  const cancelButton = downloadItem.querySelector('#cancelButton');
+  cancelButton.style = 'visibility: visible;'
+  const progressDetails = downloadItem.querySelector('#progressDetails');
+  const progressBarInner = downloadItem.querySelector('.progress-bar-inverse');
+  const sizeMetadata = downloadItem.querySelector('#sizeMetadata');
+  const title = downloadItem.querySelector('#title');
 
-    if (((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(0) >= 99) {
-      start = false
-      downloadProcess = []
-      cancelButton.remove()
-      progressBarInner.style.width = `100%`;
-      progressBarInner.innerHTML = `100% ${(data.speed / (1024*1024)).toFixed(2)}MB/s Terminado`;
-    } else {
-      progressBarInner.style.width = `${((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(0)}%`;
-      progressBarInner.innerHTML = `${((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(1)}% ${(data.speed / (1024*1024)).toFixed(2)}MB/s`;
-    }
+  if (((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(0) >= 99) {
+    start = false
+    localStorage.setItem('start', 'false');
+    downloadProcess = []
+    cancelButton.remove()
+    progressBarInner.style.width = `100%`;
+    progressBarInner.innerHTML = `100% ${(data.speed / (1024*1024)).toFixed(2)}MB/s Terminado`;
+  } else {
+    progressBarInner.style.width = `${((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(0)}%`;
+    progressBarInner.innerHTML = `${((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(1)}% ${(data.speed / (1024*1024)).toFixed(2)}MB/s`;
+  }
 
-    title.innerHTML = data.fileName.split('-')[1].length > 25 ? data.fileName.split('-')[1].substring(0, 25) : data.fileName.split('-')[1]
-    sizeMetadata.innerHTML = 'Tamaño: ' + data.total;
-    if (((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(0) > 35) {
-      progressDetails.innerHTML = `Hilos: ${data.numberThreads} | ${(data.transferred / (1024*1024)).toFixed(2)} MB / ${data.total}`;
-    } else {
-      progressDetails.innerHTML = `Hilos: ${data.numberThreads} | ${(data.transferred / (1024*1024)).toFixed(2)} MB / ${data.total} | ${((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(1)}% ${(data.speed / (1024*1024)).toFixed(2)}MB/s`;
-    }
+  title.innerHTML = data.fileName.split('-')[0].length > 25 ? data.fileName.split('-')[0].substring(0, 25) : data.fileName.split('-')[0]
+  sizeMetadata.innerHTML = 'Tamaño: ' + data.total;
+  if (((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(0) > 35) {
+    progressDetails.innerHTML = `Hilos: ${data.numberThreads} | ${(data.transferred / (1024*1024)).toFixed(2)} MB / ${data.total}`;
+  } else {
+    progressDetails.innerHTML = `Hilos: ${data.numberThreads} | ${(data.transferred / (1024*1024)).toFixed(2)} MB / ${data.total} | ${((data.transferred / (1024*1024)).toFixed(2) / Number(data.total.replace(' MB', '')) * 100).toFixed(1)}% ${(data.speed / (1024*1024)).toFixed(2)}MB/s`;
+  }
 });
 
-// Enviar mensaje al servidor
-function sendLink() {
+
+const reconnect = () => {
+  socket.connect();
+}
+
+const sendLink = () => {
   const linkInput = document.getElementById('linkElement');
   const link = linkInput.value;
   if (link.trim() !== '' && start === false) {
+    i++
     start = true
-    socket.emit('link_download', link);
+    localStorage.setItem('start', 'true');
+    const ID = generateRandomID(50)
+    socket.emit('link_download', JSON.stringify({
+      link,
+      ID
+    }));
     linkInput.value = '';
-    createDownloadItem()
+    createDownloadItem(ID)
   }
 }
 
+
+socket.on('downloadFalse', (data) => {
+  localStorage.setItem('start', data);
+  localStorage.setItem('startDownload', data);
+})
+
+socket.on('downloadTrue', (data) => {
+  localStorage.setItem('startDownload', data);
+})
 

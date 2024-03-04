@@ -8,7 +8,7 @@ fi
 if [ ! -f "servidor_v0.2.0.zip" ]; then
     echo "Descargando servidor.zip..."
     wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/servidor_v0.2.0.zip
-    unzip servidor_v0.2.0.zip
+    unzip -o servidor_v0.2.0.zip
 fi
 
 cd servidor_\(Termux\)/

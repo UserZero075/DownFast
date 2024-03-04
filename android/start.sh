@@ -5,10 +5,10 @@ if ! command -v wget &> /dev/null; then
     apt update && apt install wget && apt upgrade && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh && bash InstallTools.sh
 fi
 
-if [ ! -f "servidor_v0.1.5.zip" ]; then
+if [ ! -f "servidor_v0.2.0.zip" ]; then
     echo "Descargando servidor.zip..."
-    wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/servidor_v0.1.5.zip
-    unzip servidor_v0.1.5.zip
+    wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/servidor_v0.2.0.zip
+    unzip servidor_v0.2.0.zip
 fi
 
 cd servidor_\(Termux\)/

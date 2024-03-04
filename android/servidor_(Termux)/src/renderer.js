@@ -3,6 +3,7 @@ const socket = io('http://localhost:7569');
 let start
 let downloadItem;
 let downloadProcess;
+let ID;
 let storedDownloadProcess = localStorage.getItem('downloadProcess');
 let startedDownloadProcess = localStorage.getItem('start');
 
@@ -135,7 +136,7 @@ socket.on('downloading', (data) => {
     createDownloadItem(localStorage.getItem('startDownload'))
     downloadItem = document.getElementById(`${localStorage.getItem('startDownload')}`)
   } else {
-    downloadItem = document.getElementById(`${downloadProcess[0]}`)
+    downloadItem = document.getElementById(`${ID}`)
   }
   const cancelButton = downloadItem.querySelector('#cancelButton');
   cancelButton.style = 'visibility: visible;'
@@ -177,7 +178,7 @@ const sendLink = () => {
     i++
     start = true
     localStorage.setItem('start', 'true');
-    const ID = generateRandomID(50)
+    ID = generateRandomID(50)
     socket.emit('link_download', JSON.stringify({
       link,
       ID

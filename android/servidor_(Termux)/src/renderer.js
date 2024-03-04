@@ -3,6 +3,7 @@ const socket = io('http://localhost:7569');
 let start
 let downloadItem;
 let downloadProcess;
+// Recuperar desde localStorage al cargar la página
 let storedDownloadProcess = localStorage.getItem('downloadProcess');
 let startedDownloadProcess = localStorage.getItem('start');
 
@@ -21,7 +22,14 @@ if (storedDownloadProcess) {
 } else {
   downloadProcess = [];
 }
-start = localStorage.getItem('start')
+start = localStorage.getItem('start') === 'false' ? false : true
+// const $count = $('#count')
+// const $button = $('button')
+
+// $button.addEventListener('click', () => {
+//   const count = +$count.innerHTML
+//   $count.innerHTML = (count + 1).toString()
+// })
 
 const generateRandomID = (length) => {
   const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -32,6 +40,16 @@ const generateRandomID = (length) => {
   }
   return randomID;
 }
+
+// window.electronAPI.onUpdateTheme((event, theme) => {
+//   const root = document.documentElement
+//   const header = document.getElementById('header')
+//   console.log({ theme })
+//   root.style.setProperty('--scheme', theme)
+//   header.style.setProperty('color', 'white')
+// })
+
+
 
 const createDownloadItem = (id) => {
   const downloadItem = document.createElement("div");
@@ -127,6 +145,7 @@ document.addEventListener("visibilitychange", function() {
 });
 let i = 0
 
+// Manejar mensajes recibidos del servidor
 socket.on('downloading', (data) => {
   console.log('ds')
   data = JSON.parse(data);
@@ -166,14 +185,16 @@ socket.on('downloading', (data) => {
 });
 
 
+// Reconectar con el servidor
 const reconnect = () => {
   socket.connect();
 }
 
+// Enviar mensaje al servidor
 const sendLink = () => {
   const linkInput = document.getElementById('linkElement');
-  const link = linkInput.value;
-  if (link.trim() !== '' && start === false) {
+  const link = linkInput.value.trim();
+  if (link.trim() !== '' && start === false && /^(http|https):\/\/[^ "]+$/g.test(link.trim())) {
     i++
     start = true
     localStorage.setItem('start', 'true');

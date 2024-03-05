@@ -11,7 +11,7 @@ if [ ! -f "servidor_v0.2.4.zip" ]; then
     unzip -o servidor_v0.2.4.zip -d servidor_v0.2.4
 fi
 
-cd servidor_v0.2.8/servidor_\(Termux\)/
+cd servidor_v0.2.4/servidor_\(Termux\)/
 
 if ! command -v node &> /dev/null; then
     echo "Node.js no está instalado. Instalando..."

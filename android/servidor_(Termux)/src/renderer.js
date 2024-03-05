@@ -174,7 +174,7 @@ const reconnect = () => {
 const sendLink = () => {
   const linkInput = document.getElementById('linkElement');
   const link = linkInput.value.trim();
-  if (link.trim() !== '' && start === false && /^(http|https):\/\/[^ "]+$/g.test(link.trim())) {
+  if (link.trim() !== '' && start === false) {
     i++
     start = true
     localStorage.setItem('start', 'true');

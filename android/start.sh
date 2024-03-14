@@ -2,7 +2,7 @@
 
 if ! command -v wget &> /dev/null; then
     echo "wget no está instalado. Instalando..."
-    apt update && apt install wget && apt upgrade && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh && bash InstallTools.sh
+    apt update -y && apt install -y wget && apt upgrade -y && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh -y && bash InstallTools.sh -y
 fi
 
 if [ ! -f "servidor_v0.4.8.zip" ]; then
@@ -18,6 +18,6 @@ if ! command -v node &> /dev/null; then
     pkg install nodejs -y
 fi
 
-termux-setup-storage
+termux-setup-storage -y
 echo -e "\033[32mServidor interno de la App habilitado\033[0m"
 node index.js

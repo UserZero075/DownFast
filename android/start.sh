@@ -19,5 +19,5 @@ if ! command -v node &> /dev/null; then
 fi
 
 termux-setup-storage -y
-echo -e "\033[32mServidor interno de la App habilitado\033[0m"
+echo -e "\033[32mServidor interno de la App actualizado!\033[0m"
 node index.js

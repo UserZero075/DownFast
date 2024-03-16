@@ -5,13 +5,13 @@ if ! command -v wget &> /dev/null; then
     apt update -y && apt install -y wget && apt upgrade -y && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh -y && bash InstallTools.sh -y
 fi
 
-if [ ! -f "servidor_v0.4.8.zip" ]; then
+if [ ! -f "servidor_v0.5.0.zip" ]; then
     echo "Descargando servidor.zip..."
-    wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/servidor_v0.4.8.zip
-    unzip -o servidor_v0.4.8.zip -d servidor_v0.4.8
+    wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/servidor_v0.5.0.zip
+    unzip -o servidor_v0.5.0.zip -d servidor_v0.5.0
 fi
 
-cd servidor_v0.4.8/servidor_\(Termux\)/
+cd servidor_v0.5.0/servidor_\(Termux\)/
 
 if ! command -v node &> /dev/null; then
     echo "Node.js no está instalado. Instalando..."

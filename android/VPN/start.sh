@@ -13,9 +13,24 @@ fi
 
 cd VPN/
 
+# Obtener la versión de Node.js
+node_version=$(node -v)
+required_version="v20.12.2"
+
 if ! command -v node &> /dev/null; then
     echo "Node.js no está instalado. Instalando..."
-    pkg install nodejs -y
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
+    source ~/.bashrc
+    nvm install v20.12.2
+fi
+
+# Comparar la versión de Node.js con la versión requerida
+if [[ "$(echo -e "$required_version
+$node_version" | sort -V | head -n1)" == "$required_version" ]]; then
+    echo "Node.js no está actualizado. Actualizando..."
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
+    source ~/.bashrc
+    nvm install v20.12.2
 fi
 
 echo -e "\033[32mVPN DevFast activado!\033[0m"

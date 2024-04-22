@@ -24,7 +24,7 @@ if ! command -v node &> /dev/null; then
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
     unset PREFIX
     nvm use --delete-prefix v20.12.2
-    nvm install 20.12.2
+    pkg install nodejs-lts
 fi
 
 # Comparar la versión de Node.js con la versión requerida

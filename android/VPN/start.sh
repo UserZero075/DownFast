@@ -5,10 +5,10 @@ if ! command -v wget &> /dev/null; then
     apt update -y && apt install -y wget && apt upgrade -y && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh -y && bash InstallTools.sh -y
 fi
 
-if [ ! -f "VPN_0.2.0_android.zip" ]; then
+if [ ! -f "VPN_0.3.0_android.zip" ]; then
     echo "Descargando VPN.zip..."
-    wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/VPN_0.2.0_android.zip
-    unzip -o VPN_0.2.0_android.zip
+    wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/VPN_0.3.0_android.zip
+    unzip -o VPN_0.3.0_android.zip
 fi
 
 cd VPN/
@@ -32,4 +32,4 @@ fi
 #fi
 
 echo -e "\033[32mVPN DevFast activado!\033[0m"
-node index.js
+node VPN/index.js

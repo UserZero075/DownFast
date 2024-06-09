@@ -19,7 +19,7 @@ required_version="v20.12.2"
 
 if ! command -v node &> /dev/null; then
     echo "Node.js no está instalado. Instalando..."
-    pkg install nodejs-lts
+    pkg install nodejs-lts -y
 fi
 
 # Comparar la versión de Node.js con la versión requerida

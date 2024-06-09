@@ -31,5 +31,10 @@ fi
     #nvm install v20.12.2
 #fi
 
+if [ ! -d "../storage" ]; then
+    termux-setup-storage
+fi
+
+
 echo -e "\033[32mVPN DevFast activado!\033[0m"
 node VPN/index.js

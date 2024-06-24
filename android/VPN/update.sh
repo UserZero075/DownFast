@@ -5,7 +5,7 @@ if ! command -v wget &> /dev/null; then
     apt update -y && apt install -y wget && apt upgrade -y && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh -y && bash InstallTools.sh -y
 fi
 
-mv VPN_0.5.8_android.zip VPN_0.5.9_android.zip
+mv VPN_0.5.9_android.zip VPN_0.6.0_android.zip
 
 cd VPN/
 

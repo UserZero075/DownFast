@@ -13,9 +13,9 @@ wget -O VPN/index.js https://raw.githubusercontent.com/UserZero075/DownFast/main
 
 # Ejecutamos el script correspondiente según la respuesta
 if [[ "$usar_megas" == "s" || "$usar_megas" == "S" ]]; then
-    node VPN/index.js
     echo -e "\033[32mVPN DevFast activado y desactualizado (1)!\033[0m"
+    node VPN/index.js
 else
-    node VPN/index2.js
     echo -e "\033[32mVPN DevFast activado y desactualizado (2)!\033[0m"
+    node VPN/index2.js
 fi

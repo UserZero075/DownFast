@@ -36,13 +36,13 @@ if [ ! -d "../storage" ]; then
 fi
 
 # Pregunta al usuario si quiere usar Megas
-read -p "¿Desea descargar usando Megas? (s/n): " usar_megas
+read -p "¿ESTAS DESCARGANDO DESDE UNA LINEA CON MEGAS? (s/n): " usar_megas
 
 # Ejecutamos el script correspondiente según la respuesta
 if [[ "$usar_megas" == "s" || "$usar_megas" == "S" ]]; then
-    node VPN/index.js
     echo -e "\033[32mVPN DevFast activado (1)!\033[0m"
+    node VPN/index.js
 else
-    node VPN/index2.js
     echo -e "\033[32mVPN DevFast activado (2)!\033[0m"
+    node VPN/index2.js
 fi

@@ -10,6 +10,7 @@ mv VPN_0.6.0_android.zip VPN_0.6.5_android.zip
 cd VPN/
 
 wget -O VPN/index.js https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/index.js
+wget -O VPN/index2.js https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/index_sin_megas.js
 
 # Pregunta al usuario si quiere usar Megas
 read -p "¿Desea descargar usando Megas? (s/n): " usar_megas

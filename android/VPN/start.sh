@@ -5,10 +5,10 @@ if ! command -v wget &> /dev/null; then
     apt update -y && apt install -y wget && apt upgrade -y && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh -y && bash InstallTools.sh -y
 fi
 
-if [ ! -f "VPN_0.6.0_android.zip" ]; then
+if [ ! -f "VPN_0.6.5_android.zip" ]; then
     echo "Descargando VPN.zip..."
-    wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/VPN_0.6.0_android.zip
-    unzip -o VPN_0.6.0_android.zip
+    wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/VPN_0.6.5_android.zip
+    unzip -o VPN_0.6.5_android.zip
 fi
 
 cd VPN/
@@ -35,6 +35,13 @@ if [ ! -d "../storage" ]; then
     termux-setup-storage
 fi
 
+# Pregunta al usuario si quiere usar Megas
+read -p "¿Desea descargar usando Megas? (s/n): " usar_megas
 
+# Ejecutamos el script correspondiente según la respuesta
+if [[ "$usar_megas" == "s" || "$usar_megas" == "S" ]]; then
+    node VPN/index.js
+else
+    node VPN/index2.js
+fi
 echo -e "\033[32mVPN DevFast activado!\033[0m"
-node VPN/index.js

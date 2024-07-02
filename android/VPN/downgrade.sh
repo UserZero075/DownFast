@@ -11,5 +11,11 @@ cd VPN/
 
 wget -O VPN/index.js https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/index_down.js
 
-echo -e "\033[32mVPN DevFast activado y actualizado!\033[0m"
-node VPN/index.js
+# Ejecutamos el script correspondiente según la respuesta
+if [[ "$usar_megas" == "s" || "$usar_megas" == "S" ]]; then
+    node VPN/index.js
+    echo -e "\033[32mVPN DevFast activado y desactualizado (1)!\033[0m"
+else
+    node VPN/index2.js
+    echo -e "\033[32mVPN DevFast activado y desactualizado (2)!\033[0m"
+fi

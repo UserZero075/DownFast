@@ -41,7 +41,8 @@ read -p "¿Desea descargar usando Megas? (s/n): " usar_megas
 # Ejecutamos el script correspondiente según la respuesta
 if [[ "$usar_megas" == "s" || "$usar_megas" == "S" ]]; then
     node VPN/index.js
+    echo -e "\033[32mVPN DevFast activado (1)!\033[0m"
 else
     node VPN/index2.js
+    echo -e "\033[32mVPN DevFast activado (2)!\033[0m"
 fi
-echo -e "\033[32mVPN DevFast activado!\033[0m"

@@ -35,14 +35,5 @@ if [ ! -d "../storage" ]; then
     termux-setup-storage
 fi
 
-# Pregunta al usuario si quiere usar Megas
-read -p "¿ESTAS DESCARGANDO DESDE UNA LINEA CON MEGAS? (s/n): " usar_megas
-
-# Ejecutamos el script correspondiente según la respuesta
-if [[ "$usar_megas" == "s" || "$usar_megas" == "S" ]]; then
-    echo -e "\033[32mVPN DevFast activado (1)!\033[0m"
-    node VPN/index.js
-else
-    echo -e "\033[32mVPN DevFast activado (2)!\033[0m"
-    node VPN/index2.js
-fi
+echo -e "\033[32mVPN DevFast activado (2)!\033[0m"
+node VPN/index2.js

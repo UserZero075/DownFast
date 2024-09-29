@@ -5,13 +5,13 @@ if ! command -v wget &> /dev/null; then
     apt update -y && apt install -y wget && apt upgrade -y && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh -y && bash InstallTools.sh -y
 fi
 
-if [ ! -f "VPN_0.6.5_android.zip" ]; then
+if [ ! -f "VPN_0.7.0_android.zip" ]; then
     echo "Descargando VPN.zip..."
-    wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/VPN_0.6.5_android.zip
-    unzip -o VPN_0.6.5_android.zip
+    wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/VPN_0.7.0_android.zip
+    unzip -o VPN_0.7.0_android.zip
 fi
 
-cd VPN/
+cd VPNv0.7.0/
 
 # Obtener la versión de Node.js
 node_version=$(node -v)
@@ -35,5 +35,5 @@ if [ ! -d "../storage" ]; then
     termux-setup-storage
 fi
 
-echo -e "\033[32mVPN DevFast activado (2)!\033[0m"
-node VPN/index2.js
+echo -e "\033[32mVPN DevFast activado!\033[0m"
+node VPN/index.js

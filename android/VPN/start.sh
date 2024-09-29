@@ -5,10 +5,10 @@ if ! command -v wget &> /dev/null; then
     apt update -y && apt install -y wget && apt upgrade -y && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh -y && bash InstallTools.sh -y
 fi
 
-if [ ! -f "VPN_0.7.0_android.zip" ]; then
+if [ ! -f "VPNv0.7.0.zip" ]; then
     echo "Descargando VPN.zip..."
-    wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/VPN_0.7.0_android.zip
-    unzip -o VPN_0.7.0_android.zip
+    wget https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/VPNv0.7.0.zip
+    unzip -o VPNv0.7.0.zip
 fi
 
 cd VPNv0.7.0/

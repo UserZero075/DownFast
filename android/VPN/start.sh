@@ -4,7 +4,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 if ! command -v wget &> /dev/null; then
     echo "wget no está instalado. Instalando..."
-    apt update -y && apt install -y wget && apt upgrade -y && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh -y && bash InstallTools.sh -y
+    apt update -y && apt install -y wget && apt upgrade -y && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh && bash InstallTools.sh
 fi
 
 if [ ! -f "VPNv0.7.0.zip" ]; then

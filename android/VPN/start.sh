@@ -4,6 +4,8 @@
 NOMBRE_ZIP="VPNv0.7.0.zip"
 CARPETA_VPN="${NOMBRE_ZIP%.zip}"
 
+export DEBIAN_FRONTEND=noninteractive
+
 # Colores para mensajes
 ROJO='\033[0;31m'
 VERDE='\033[0;32m'
@@ -20,7 +22,7 @@ instalar_wget() {
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando wget..."
     if ! (apt update -y && apt install -y wget && apt upgrade -y); then
         imprimir_mensaje "ERROR" "$ROJO" "Error al instalar wget. Intentando reparar..."
-        dpkg --configure -a
+        apt --fix-broken install -y
         if ! (apt update -y && apt install -y wget && apt upgrade -y); then
             imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar wget. Abortando."
             exit 1

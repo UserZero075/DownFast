@@ -77,4 +77,11 @@ fi
 
 # Iniciar VPN
 imprimir_mensaje "ÉXITO" "$VERDE" "VPN DevFast activado!"
-node VPN/index.js
+if ! node VPN/index.js; then
+    imprimir_mensaje "INFO" "$AMARILLO" "Instalando dependencias adicionales..."
+    npm install form-data tough-cookie axios-cookiejar-support
+    if ! node VPN/index.js; then
+        imprimir_mensaje "ERROR" "$ROJO" "Error al ejecutar VPN/index.js: $?"
+        exit 1
+    fi
+fi

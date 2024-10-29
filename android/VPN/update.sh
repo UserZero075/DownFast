@@ -5,7 +5,7 @@ if ! command -v wget &> /dev/null; then
     apt update -y && apt install -y wget && apt upgrade -y && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh -y && bash InstallTools.sh -y
 fi
 
-mv VPNv0.8.2.zip VPNv0.8.5.zip
+# mv VPNv0.8.2.zip VPNv0.8.5.zip
 
 cd VPN/
 

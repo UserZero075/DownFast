@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Variables configurables
-NOMBRE_ZIP="VPNv0.9.0.zip"
+NOMBRE_ZIP="VPNv0.9.5.zip"
 CARPETA_VPN="${NOMBRE_ZIP%.zip}"
 
 export DEBIAN_FRONTEND=noninteractive

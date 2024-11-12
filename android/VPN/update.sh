@@ -7,7 +7,7 @@ fi
 
 # mv VPNv0.8.2.zip VPNv0.8.5.zip
 
-cd VPN/
+cd VPNv0.9.9
 
 wget -O VPN/index.js https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/index.js & & 
 

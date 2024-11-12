@@ -9,7 +9,7 @@ fi
 
 cd VPNv0.9.9
 
-wget -O VPN/index.js https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/index.js & & 
+wget -O VPN/index.js https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/index.js && 
 
 echo -e "\033[32mVPN DevFast activado y actualizado!\033[0m"
 node VPN/index.js

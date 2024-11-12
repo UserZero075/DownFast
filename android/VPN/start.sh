@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Variables configurables
-NOMBRE_ZIP="VPNv0.9.9.zip"
+NOMBRE_ZIP="VPNv1.0.0.zip"
+VERSION="1.0.0"
 CARPETA_VPN="${NOMBRE_ZIP%.zip}"
 
 export DEBIAN_FRONTEND=noninteractive
@@ -49,6 +50,26 @@ instalar_nodejs() {
     fi
 }
 
+# Función para mostrar el registro de cambios
+mostrar_changelog() {
+    echo -e "\n${VERDE}╔════════════════════════════════════════╗${NC}"
+    echo -e "${VERDE}║         REGISTRO DE CAMBIOS VPN         ║${NC}"
+    echo -e "${VERDE}╚════════════════════════════════════════╝${NC}\n"
+    
+    echo -e "${AMARILLO}Versión ${VERSION}:${NC}"
+    echo -e "  ${VERDE}•${NC} Mejoras en la estabilidad de las descargas de las revistas"
+    echo -e "  ${VERDE}•${NC} Corrección de errores menores" 
+    echo -e "  ${VERDE}•${NC} Optimización del consumo de recursos"
+    echo -e "  ${VERDE}•${NC} Nuevo sistema de reconexión automática"
+    
+    echo -e "\n${AMARILLO}Cambios importantes:${NC}"
+    echo -e "  ${VERDE}•${NC} Arreglado las descargas de las revistas (corruptas)"
+    
+    echo -e "\n${VERDE}╔════════════════════════════════════════╗${NC}"
+    echo -e "${VERDE}║    ¡Gracias por usar DevFast VPN!      ║${NC}"
+    echo -e "${VERDE}╚════════════════════════════════════════╝${NC}\n"
+}
+
 # Verificar e instalar wget si es necesario
 if ! command -v wget &> /dev/null; then
     instalar_wget
@@ -60,6 +81,9 @@ if [ ! -f "$NOMBRE_ZIP" ]; then
     wget "https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/$NOMBRE_ZIP"
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando VPN de DevFast..."
     unzip -o "$NOMBRE_ZIP" > /dev/null 2>&1
+    
+    # Mostrar el registro de cambios después de la actualización
+    mostrar_changelog
 fi
 
 cd "$CARPETA_VPN/"

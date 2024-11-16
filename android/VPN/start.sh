@@ -70,7 +70,7 @@ verificar_actualizacion() {
             esac
         else
             imprimir_mensaje "INFO" "$VERDE" "VPN está actualizado (v$VERSION)"
-            return 0
+            return 1
         fi
     else
         imprimir_mensaje "WARNING" "$AMARILLO" "No se pudo verificar actualizaciones"

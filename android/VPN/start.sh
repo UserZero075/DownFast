@@ -165,7 +165,7 @@ if [ ! -f "$NOMBRE_ZIP" ] && [ $actualizar -eq 0 ]; then
     unzip -o "$NOMBRE_ZIP" > /dev/null 2>&1
 fi
 
-if [ $actualizar -eq 0 ]; then
+if [ -f "$NOMBRE_ZIP" ]; then
     cd "$CARPETA_VPN/"
 else
     cd "$VERSION_ANTERIOR/"

@@ -137,11 +137,11 @@ mostrar_changelog() {
     echo -e "\n${AMARILLO}🐛 Problemas Resueltos:${NC}"
     echo -e "  ${VERDE}•${NC} Descargas que quedaban 'atascadas'"
     echo -e "  ${VERDE}•${NC} Errores al cancelar descargas"
-    echo -e "  ${VERDE}•${NC} Problemas de reconexión automática"
+    echo -e "  ${VERDE}•${NC} Problemas de reconexión automática"A
     
     echo -e "\n${AMARILLO}📝 Nota:${NC}"
     echo -e "  ${VERDE}•${NC} Si las descargas de catalogo (upspe) se les queda atascada, repórtenlo."
-    echo -e "  ${VERDE}•${NC} Esto es una verisón BETA, puede que tenga errores."
+    echo -e "  ${VERDE}•${NC} Esto es una versión BETA, puede que tenga errores."
     
     echo -e "\n${VERDE}╔═══════════════════════════════════════════════╗${NC}"
     echo -e "${VERDE}║         ¡Gracias por usar DevFast VPN!        ║${NC}"

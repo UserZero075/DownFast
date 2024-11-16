@@ -29,53 +29,34 @@ verificar_actualizacion() {
 
     imprimir_mensaje "INFO" "$CYAN" "Verificando actualizaciones..."
     
-    # Crear directorio temporal
-    TEMP_DIR=$(mktemp -d)
-    wget -q "$VERSION_URL" -O "$TEMP_DIR/version.txt"
-    
-    if [ -f "$TEMP_DIR/version.txt" ]; then
-        ULTIMA_VERSION=$(cat "$TEMP_DIR/version.txt")
-        rm -rf "$TEMP_DIR"
         
-        if [ "$ULTIMA_VERSION" != "$VERSION" ] && [ ! -f "$NOMBRE_ZIP" ]; then
-            echo -e "\n${AMARILLO}╔═══════════════════════════════════════════════╗${NC}"
-            echo -e "${AMARILLO}║         ¡Nueva versión disponible!            ║${NC}"
-            echo -e "${AMARILLO}╚═══════════════════════════════════════════════╝${NC}"
-            echo -e "\n${CYAN}Versión actual:${NC} ${VERSION_ANTERIOR#VPNv}"
-            echo -e "${VERDE}Nueva versión:${NC} $VERSION\n"
+    if [ "$ULTIMA_VERSION" != "$VERSION" ] && [ ! -f "$NOMBRE_ZIP" ]; then
+        echo -e "\n${AMARILLO}╔═══════════════════════════════════════════════╗${NC}"
+        echo -e "${AMARILLO}║         ¡Nueva versión disponible!            ║${NC}"
+        echo -e "${AMARILLO}╚═══════════════════════════════════════════════╝${NC}"
+        echo -e "\n${CYAN}Versión actual:${NC} ${VERSION_ANTERIOR#VPNv}"
+        echo -e "${VERDE}Nueva versión:${NC} $VERSION\n"
 
-            # Mostrar el registro de cambios después de la actualización
-            mostrar_changelog
-            
-            read -p "¿Desea actualizar ahora? (s/n): " respuesta
-            case $respuesta in
-                [Ss]* )
-                    imprimir_mensaje "INFO" "$VERDE" "Iniciando actualización..."
-                    # Hacer backup de la configuración actual si existe
-                    if [ -d "$CARPETA_VPN" ]; then
-                        mv "$CARPETA_VPN" "${CARPETA_VPN}_backup_$(date +%Y%m%d_%H%M%S)"
-                    fi
-                    # Eliminar zip anterior si existe
-                    rm -f "$NOMBRE_ZIP"
-                    return 0
-                    ;;
-                [Nn]* )
-                    imprimir_mensaje "INFO" "$AMARILLO" "Actualización pospuesta"
-                    return 1
-                    ;;
-                * )
-                    imprimir_mensaje "INFO" "$AMARILLO" "Respuesta no válida, continuando sin actualizar"
-                    return 1
-                    ;;
-            esac
-        else
-            imprimir_mensaje "INFO" "$VERDE" "VPN está actualizado (v$VERSION)"
-            return 1
-        fi
-    else
-        imprimir_mensaje "WARNING" "$AMARILLO" "No se pudo verificar actualizaciones"
-        return 1
+        # Mostrar el registro de cambios después de la actualización
+        mostrar_changelog
+        
+        read -p "¿Desea actualizar ahora? (s/n): " respuesta
+        case $respuesta in
+            [Ss]* )
+                imprimir_mensaje "INFO" "$VERDE" "Iniciando actualización..."
+                if [ -d "$CARPETA_VPN" ]; then
+                    mv "$CARPETA_VPN" "${CARPETA_VPN}_backup_$(date +%Y%m%d_%H%M%S)"
+                fi
+                rm -f "$NOMBRE_ZIP"
+                return 0
+                ;;
+            * )
+                imprimir_mensaje "INFO" "$AMARILLO" "Actualización pospuesta"
+                return 1
+                ;;
+        esac
     fi
+    return 1
 }
 
 # Función para instalar wget
@@ -155,10 +136,10 @@ fi
 
 # Verificar actualizaciones antes de continuar
 verificar_actualizacion
-actualizar=$?
+necesita_actualizar=$?
 
 # Descargar y descomprimir VPN si es necesario o si hay actualización
-if [ ! -f "$NOMBRE_ZIP" ] && [ $actualizar -eq 0 ]; then
+if [ ! -f "$NOMBRE_ZIP" ] && [ "$necesita_actualizar" = "0" ]; then
     imprimir_mensaje "INFO" "$AMARILLO" "Descargando $NOMBRE_ZIP..."
     wget "https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/$NOMBRE_ZIP"
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando VPN de DevFast..."

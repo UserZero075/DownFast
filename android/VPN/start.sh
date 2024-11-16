@@ -137,7 +137,7 @@ mostrar_changelog() {
     echo -e "\n${AMARILLO}🐛 Problemas Resueltos:${NC}"
     echo -e "  ${VERDE}•${NC} Descargas que quedaban 'atascadas'"
     echo -e "  ${VERDE}•${NC} Errores al cancelar descargas"
-    echo -e "  ${VERDE}•${NC} Problemas de reconexión automática"A
+    echo -e "  ${VERDE}•${NC} Problemas de reconexión automática"
     
     echo -e "\n${AMARILLO}📝 Nota:${NC}"
     echo -e "  ${VERDE}•${NC} Si las descargas de catalogo (upspe) se les queda atascada, repórtenlo."

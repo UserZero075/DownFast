@@ -29,7 +29,6 @@ verificar_actualizacion() {
 
     imprimir_mensaje "INFO" "$CYAN" "Verificando actualizaciones..."
     
-        
     if [ "$ULTIMA_VERSION" != "$VERSION" ] && [ ! -f "$NOMBRE_ZIP" ]; then
         echo -e "\n${AMARILLO}╔═══════════════════════════════════════════════╗${NC}"
         echo -e "${AMARILLO}║         ¡Nueva versión disponible!            ║${NC}"
@@ -37,24 +36,32 @@ verificar_actualizacion() {
         echo -e "\n${CYAN}Versión actual:${NC} ${VERSION_ANTERIOR#VPNv}"
         echo -e "${VERDE}Nueva versión:${NC} $VERSION\n"
 
-        # Mostrar el registro de cambios después de la actualización
         mostrar_changelog
         
-        read -p "¿Desea actualizar ahora? (s/n): " respuesta
-        case $respuesta in
-            [Ss]* )
-                imprimir_mensaje "INFO" "$VERDE" "Iniciando actualización..."
-                if [ -d "$CARPETA_VPN" ]; then
-                    mv "$CARPETA_VPN" "${CARPETA_VPN}_backup_$(date +%Y%m%d_%H%M%S)"
-                fi
-                rm -f "$NOMBRE_ZIP"
-                return 0
-                ;;
-            * )
-                imprimir_mensaje "INFO" "$AMARILLO" "Actualización pospuesta"
-                return 1
-                ;;
-        esac
+        # Método más compatible para Termux
+        while true; do
+            echo -n "¿Desea actualizar ahora? (s/n): "
+            read -n 1 respuesta
+            echo ""  # Nueva línea después de la respuesta
+            
+            case "$respuesta" in
+                [sS])
+                    imprimir_mensaje "INFO" "$VERDE" "Iniciando actualización..."
+                    if [ -d "$CARPETA_VPN" ]; then
+                        mv "$CARPETA_VPN" "${CARPETA_VPN}_backup_$(date +%Y%m%d_%H%M%S)"
+                    fi
+                    rm -f "$NOMBRE_ZIP"
+                    return 0
+                    ;;
+                [nN])
+                    imprimir_mensaje "INFO" "$AMARILLO" "Actualización pospuesta"
+                    return 1
+                    ;;
+                *)
+                    echo "Por favor, responde 's' para sí o 'n' para no."
+                    ;;
+            esac
+        done
     fi
     return 1
 }

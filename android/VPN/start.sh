@@ -1,10 +1,9 @@
 #!/bin/bash
 
 # Variables configurables
-NOMBRE_ZIP="VPNv1.0.5.zip"
-VERSION="1.0.5"
+NOMBRE_ZIP="VPNv1.0.6.zip"
+VERSION="1.0.6"
 VERSION_ANTERIOR="VPNv1.0.0"
-VERSION_URL="https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/version.txt"
 CARPETA_VPN="${NOMBRE_ZIP%.zip}"
 
 export DEBIAN_FRONTEND=noninteractive
@@ -33,35 +32,16 @@ verificar_actualizacion() {
         echo -e "\n${AMARILLO}╔═══════════════════════════════════════════════╗${NC}"
         echo -e "${AMARILLO}║         ¡Nueva versión disponible!            ║${NC}"
         echo -e "${AMARILLO}╚═══════════════════════════════════════════════╝${NC}"
-        echo -e "\n${CYAN}Versión actual:${NC} ${VERSION_ANTERIOR#VPNv}"
         echo -e "${VERDE}Nueva versión:${NC} $VERSION\n"
 
         mostrar_changelog
         
-        # Método más compatible para Termux
-        while true; do
-            echo -n "¿Desea actualizar ahora? (s/n): "
-            read -n 1 respuesta
-            echo ""  # Nueva línea después de la respuesta
-            
-            case "$respuesta" in
-                [sS])
-                    imprimir_mensaje "INFO" "$VERDE" "Iniciando actualización..."
-                    if [ -d "$CARPETA_VPN" ]; then
-                        mv "$CARPETA_VPN" "${CARPETA_VPN}_backup_$(date +%Y%m%d_%H%M%S)"
-                    fi
-                    rm -f "$NOMBRE_ZIP"
-                    return 0
-                    ;;
-                [nN])
-                    imprimir_mensaje "INFO" "$AMARILLO" "Actualización pospuesta"
-                    return 1
-                    ;;
-                *)
-                    echo "Por favor, responde 's' para sí o 'n' para no."
-                    ;;
-            esac
-        done
+        imprimir_mensaje "INFO" "$VERDE" "Iniciando actualización..."
+        if [ -d "$CARPETA_VPN" ]; then
+            mv "$CARPETA_VPN" "${CARPETA_VPN}_backup_$(date +%Y%m%d_%H%M%S)"
+        fi
+        rm -f "$NOMBRE_ZIP"
+        return 0
     fi
     return 1
 }
@@ -104,16 +84,8 @@ mostrar_changelog() {
     echo -e "${VERDE}      REGISTRO DE CAMBIOS VPN ${VERSION}        ${NC}"
     echo -e "${VERDE}╚═══════════════════════════════════════════════╝${NC}\n"
     
-    echo -e "${AMARILLO}🚀 Mejoras Principales:${NC}"
-    echo -e "  ${VERDE}•${NC} Sistema mejorado de descargas OJS (Revistas)"
-    echo -e "  ${VERDE}•${NC} Mejor manejo de reconexiones automáticas"
-    echo -e "  ${VERDE}•${NC} Mayor estabilidad en las descargas"
-    echo -e "  ${VERDE}•${NC} Prevención de descargas duplicadas (doble banda ancha en uso)"
-    
     echo -e "\n${AMARILLO}🐛 Problemas Resueltos:${NC}"
-    echo -e "  ${VERDE}•${NC} Descargas que quedaban 'atascadas'"
-    echo -e "  ${VERDE}•${NC} Errores al cancelar descargas"
-    echo -e "  ${VERDE}•${NC} Problemas de reconexión automática"
+    echo -e "  ${VERDE}•${NC} Descargas duplicadas en catalogo"
     
     echo -e "\n${VERDE}╔═══════════════════════════════════════════════╗${NC}"
     echo -e "${VERDE}║         ¡Gracias por usar DevFast VPN!        ║${NC}"

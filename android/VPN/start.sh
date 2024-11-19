@@ -1,9 +1,7 @@
 #!/bin/bash
 
 # Variables configurables
-NOMBRE_ZIP="VPNv1.0.6.zip"
-VERSION="1.0.6"
-VERSION_ANTERIOR="VPNv1.0.0"
+NOMBRE_ZIP="VPNv1.0.7.zip"
 CARPETA_VPN="${NOMBRE_ZIP%.zip}"
 
 export DEBIAN_FRONTEND=noninteractive
@@ -12,38 +10,11 @@ export DEBIAN_FRONTEND=noninteractive
 ROJO='\033[0;31m'
 VERDE='\033[0;32m'
 AMARILLO='\033[0;33m'
-CYAN='\033[0;36m'
 NC='\033[0m' # Sin Color
 
 # Función para imprimir mensajes con formato
 imprimir_mensaje() {
     echo -e "${2}[${1}] ${3}${NC}"
-}
-
-# Función para verificar actualizaciones
-verificar_actualizacion() {
-    if ! command -v wget &> /dev/null; then
-        return 1
-    fi
-
-    imprimir_mensaje "INFO" "$CYAN" "Verificando actualizaciones..."
-    
-    if [ "$ULTIMA_VERSION" != "$VERSION" ] && [ ! -f "$NOMBRE_ZIP" ]; then
-        echo -e "\n${AMARILLO}╔═══════════════════════════════════════════════╗${NC}"
-        echo -e "${AMARILLO}║         ¡Nueva versión disponible!            ║${NC}"
-        echo -e "${AMARILLO}╚═══════════════════════════════════════════════╝${NC}"
-        echo -e "${VERDE}Nueva versión:${NC} $VERSION\n"
-
-        mostrar_changelog
-        
-        imprimir_mensaje "INFO" "$VERDE" "Iniciando actualización..."
-        if [ -d "$CARPETA_VPN" ]; then
-            mv "$CARPETA_VPN" "${CARPETA_VPN}_backup_$(date +%Y%m%d_%H%M%S)"
-        fi
-        rm -f "$NOMBRE_ZIP"
-        return 0
-    fi
-    return 1
 }
 
 # Función para instalar wget
@@ -78,42 +49,20 @@ instalar_nodejs() {
     fi
 }
 
-# Función para mostrar el registro de cambios
-mostrar_changelog() {
-    echo -e "\n${VERDE}╔═══════════════════════════════════════════════╗${NC}"
-    echo -e "${VERDE}      REGISTRO DE CAMBIOS VPN ${VERSION}        ${NC}"
-    echo -e "${VERDE}╚═══════════════════════════════════════════════╝${NC}\n"
-    
-    echo -e "\n${AMARILLO}🐛 Problemas Resueltos:${NC}"
-    echo -e "  ${VERDE}•${NC} Descargas duplicadas en catalogo"
-    
-    echo -e "\n${VERDE}╔═══════════════════════════════════════════════╗${NC}"
-    echo -e "${VERDE}║         ¡Gracias por usar DevFast VPN!        ║${NC}"
-    echo -e "${VERDE}╚═══════════════════════════════════════════════╝${NC}\n"
-}
-
 # Verificar e instalar wget si es necesario
 if ! command -v wget &> /dev/null; then
     instalar_wget
 fi
 
-# Verificar actualizaciones antes de continuar
-verificar_actualizacion
-necesita_actualizar=$?
-
-# Descargar y descomprimir VPN si es necesario o si hay actualización
-if [ ! -f "$NOMBRE_ZIP" ] && [ "$necesita_actualizar" = "0" ]; then
+# Descargar y descomprimir VPN si es necesario
+if [ ! -f "$NOMBRE_ZIP" ]; then
     imprimir_mensaje "INFO" "$AMARILLO" "Descargando $NOMBRE_ZIP..."
     wget "https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/$NOMBRE_ZIP"
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando VPN de DevFast..."
     unzip -o "$NOMBRE_ZIP" > /dev/null 2>&1
 fi
 
-if [ -f "$NOMBRE_ZIP" ]; then
-    cd "$CARPETA_VPN/"
-else
-    cd "$VERSION_ANTERIOR/"
-fi
+cd "$CARPETA_VPN/"
 
 # Verificar e instalar Node.js si es necesario
 if ! command -v node &> /dev/null; then
@@ -127,12 +76,5 @@ if [ ! -d "../storage" ]; then
 fi
 
 # Iniciar VPN
-imprimir_mensaje "ÉXITO" "$VERDE" "VPN DevFast $VERSION activado!"
-if ! node VPN/index.js; then
-    imprimir_mensaje "INFO" "$AMARILLO" "Instalando dependencias adicionales..."
-    npm install form-data tough-cookie axios-cookiejar-support
-    if ! node VPN/index.js; then
-        imprimir_mensaje "ERROR" "$ROJO" "Error al ejecutar VPN/index.js: $?"
-        exit 1
-    fi
-fi
+imprimir_mensaje "ÉXITO" "$VERDE" "VPN DevFast activado!"
+node VPN/index.js

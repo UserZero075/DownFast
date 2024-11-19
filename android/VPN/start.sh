@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Variables configurables
-NOMBRE_ZIP="VPNv1.0.2.BETA.zip"
-VERSION="1.0.2.BETA"
+NOMBRE_ZIP="VPNv1.0.5.zip"
+VERSION="1.0.5"
 VERSION_ANTERIOR="VPNv1.0.0"
 VERSION_URL="https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/version.txt"
 CARPETA_VPN="${NOMBRE_ZIP%.zip}"
@@ -108,28 +108,12 @@ mostrar_changelog() {
     echo -e "  ${VERDE}•${NC} Sistema mejorado de descargas OJS (Revistas)"
     echo -e "  ${VERDE}•${NC} Mejor manejo de reconexiones automáticas"
     echo -e "  ${VERDE}•${NC} Mayor estabilidad en las descargas"
-    echo -e "  ${VERDE}•${NC} Prevención de descargas duplicadas"
-    
-    echo -e "\n${AMARILLO}🎯 Beneficios para el Usuario:${NC}"
-    echo -e "  ${VERDE}1.${NC} Descargas más Estables"
-    echo -e "     • Menos errores durante la descarga"
-    echo -e "     • Mejor recuperación ante fallos de conexión"
-    echo -e "  ${VERDE}2.${NC} Mejor Experiencia"
-    echo -e "     • Las descargas se cancelan correctamente"
-    echo -e "     • No se permiten descargas duplicadas"
-    echo -e "     • Mensajes de error más claros"
-    echo -e "  ${VERDE}3.${NC} Optimización de Recursos"
-    echo -e "     • Menor consumo de memoria"
-    echo -e "     • Mejor rendimiento general"
+    echo -e "  ${VERDE}•${NC} Prevención de descargas duplicadas (doble banda ancha en uso)"
     
     echo -e "\n${AMARILLO}🐛 Problemas Resueltos:${NC}"
     echo -e "  ${VERDE}•${NC} Descargas que quedaban 'atascadas'"
     echo -e "  ${VERDE}•${NC} Errores al cancelar descargas"
     echo -e "  ${VERDE}•${NC} Problemas de reconexión automática"
-    
-    echo -e "\n${AMARILLO}📝 Nota:${NC}"
-    echo -e "  ${VERDE}•${NC} Si las descargas de catalogo (upspe) se les queda atascada, repórtenlo."
-    echo -e "  ${VERDE}•${NC} Esto es una versión BETA, puede que tenga errores."
     
     echo -e "\n${VERDE}╔═══════════════════════════════════════════════╗${NC}"
     echo -e "${VERDE}║         ¡Gracias por usar DevFast VPN!        ║${NC}"

@@ -1,8 +1,19 @@
 #!/bin/bash
 
 # Variables configurables
-NOMBRE_ZIP="VPNv1.1.1.zip"
+DEFAULT_VERSION="1.1.1"
+VERSION=${2:-$DEFAULT_VERSION}
+NOMBRE_ZIP="VPNv${VERSION}.zip"
 CARPETA_VPN="${NOMBRE_ZIP%.zip}"
+
+# Verificar si se proporciona el parámetro --version
+if [ "$1" = "--version" ] && [ ! -z "$2" ]; then
+    imprimir_mensaje "INFO" "$AMARILLO" "Usando versión $VERSION"
+else
+    VERSION=$DEFAULT_VERSION
+    NOMBRE_ZIP="VPNv${VERSION}.zip"
+    imprimir_mensaje "INFO" "$AMARILLO" "Usando versión por defecto $VERSION"
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 

@@ -5,7 +5,7 @@ if ! command -v wget &> /dev/null; then
     apt update -y && apt install -y wget && apt upgrade -y && wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh -y && bash InstallTools.sh -y
 fi
 
-cd VPNv1.0.9
+cd VPNv1.1.1
 
 wget -O VPN/index.js https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/index2.js && 
 

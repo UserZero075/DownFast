@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Variables configurables
-DEFAULT_VERSION="1.1.1"
+DEFAULT_VERSION="1.2.0"
 VERSION=${2:-$DEFAULT_VERSION}
 NOMBRE_ZIP="VPNv${VERSION}.zip"
 CARPETA_VPN="${NOMBRE_ZIP%.zip}"

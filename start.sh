@@ -130,11 +130,11 @@ descargar_archivo_github() {
 }
 
 echo
-echo "==============================================================================="
+echo "===================================================="
 echo
-echo "                        DownFast Auto-Updater v1.0"
+echo "             DownFast Auto-Updater v1.0"
 echo
-echo "==============================================================================="
+echo "====================================================="
 echo
 
 # Verificar e instalar wget si es necesario
@@ -250,9 +250,9 @@ fi
 echo
 imprimir_mensaje "OK" "$VERDE" "Ejecutando: $file_to_execute"
 echo
-echo "==============================================================================="
-echo "                              DOWNFAST INICIADO                               "
-echo "==============================================================================="
+echo "===================================================="
+echo "              DOWNFAST INICIADO                     "
+echo "===================================================="
 echo
 
 # Ejecutar el archivo con Node.js
@@ -260,7 +260,7 @@ node "VPN/$file_to_execute"
 exit_code=$?
 
 echo
-echo "==============================================================================="
+echo "===================================================="
 
 if [ $exit_code -ne 0 ]; then
     imprimir_mensaje "ERROR" "$ROJO" "DownFast termino con errores (Codigo: $exit_code)"

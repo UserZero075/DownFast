@@ -68,24 +68,26 @@ instalar_nodejs() {
     fi
 }
 
-# Función para leer teclas especiales
+# Función para leer teclas especiales - VERSIÓN SIMPLIFICADA
 leer_tecla() {
     local key
-    IFS= read -rsn1 key 2>/dev/null >&2
-    if [[ $key = $'\x1b' ]]; then
-        read -rsn2 key 2>/dev/null >&2
+    read -rsn1 key
+    
+    # Detectar secuencias de escape (flechas)
+    if [[ $key == $'\e' ]]; then
+        read -rsn2 key
         case $key in
             '[A') echo "UP" ;;
             '[B') echo "DOWN" ;;
-            '[C') echo "RIGHT" ;;
-            '[D') echo "LEFT" ;;
+            *) echo "ESC" ;;
         esac
-    elif [[ $key = $'\x0a' ]] || [[ $key = $'\x0d' ]]; then
+    # Detectar Enter
+    elif [[ $key == "" ]]; then
         echo "ENTER"
-    elif [[ $key = $'\x1b' ]]; then
-        echo "ESC"
-    elif [[ $key = 'q' ]] || [[ $key = 'Q' ]]; then
+    # Detectar q/Q para salir
+    elif [[ $key == "q" ]] || [[ $key == "Q" ]]; then
         echo "QUIT"
+    # Cualquier otra tecla
     else
         echo "OTHER"
     fi
@@ -100,15 +102,16 @@ mostrar_menu_navegable() {
     while true; do
         clear
         echo
-        echo "==============================================="
+        echo "===================================================="
         echo
-        echo "            DownFast Auto-Updater v2.0"
+        echo "             DownFast Auto-Updater v2.0"
         echo
-        echo "================================================"
+        echo "====================================================="
         echo
-        echo "================================================"
-        echo "             MENU DE OPCIONES"
-        echo "================================================"
+        echo "+-----------------------------------------------------------------------------+"
+        echo "|                              MENU DE OPCIONES                              |"
+        echo "+-----------------------------------------------------------------------------+"
+        echo "|                                                                             |"
         
         for i in "${!opciones[@]}"; do
             if [ $i -eq $seleccionado ]; then
@@ -118,7 +121,8 @@ mostrar_menu_navegable() {
             fi
         done
         
-        echo "================================================"
+        echo "|                                                                             |"
+        echo "+-----------------------------------------------------------------------------+"
         echo
         echo -e "${AMARILLO}Usa las flechas ↑↓ para navegar, Enter para seleccionar, 'q' para salir${NC}"
         
@@ -170,9 +174,9 @@ mostrar_versiones_navegable() {
     while true; do
         clear
         echo
-        echo "================================================"
-        echo "             VERSIONES DISPONIBLES      "
-        echo "================================================"
+        echo "+-----------------------------------------------------------------------------+"
+        echo "|                           VERSIONES DISPONIBLES                            |"
+        echo "+-----------------------------------------------------------------------------+"
         
         for i in "${!versions_array[@]}"; do
             local version_num=$(echo "${versions_array[i]}" | sed 's/^index_\|\.js$//g')
@@ -183,7 +187,7 @@ mostrar_versiones_navegable() {
             fi
         done
         
-        echo "================================================"
+        echo "+-----------------------------------------------------------------------------+"
         echo
         echo -e "${AMARILLO}Usa las flechas ↑↓ para navegar, Enter para seleccionar, 'q' para volver al menú${NC}"
         
@@ -510,9 +514,9 @@ ejecutar_archivo() {
     echo
     imprimir_mensaje "OK" "$VERDE" "Ejecutando: $FILE_TO_EXECUTE"
     echo
-    echo "================================================"
-    echo "              DOWNFAST INICIADO        "
-    echo "================================================"
+    echo "===================================================="
+    echo "              DOWNFAST INICIADO                     "
+    echo "===================================================="
     echo
 
     # Ejecutar el archivo con Node.js
@@ -520,7 +524,7 @@ ejecutar_archivo() {
     exit_code=$?
 
     echo
-    echo "================================================"
+    echo "===================================================="
 
     if [ $exit_code -ne 0 ]; then
         imprimir_mensaje "ERROR" "$ROJO" "DownFast termino con errores (Codigo: $exit_code)"
@@ -547,11 +551,11 @@ descargar_archivo_github() {
 }
 
 echo
-echo "================================================"
+echo "===================================================="
 echo
-echo "         DownFast Auto-Updater v2.0"
+echo "             DownFast Auto-Updater v2.0"
 echo
-echo "================================================"
+echo "====================================================="
 echo
 
 # Limpiar archivos temporales de ejecuciones anteriores

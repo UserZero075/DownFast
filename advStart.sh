@@ -15,148 +15,108 @@ imprimir_mensaje() {
     echo -e "${2}[${1}] ${3}${NC}"
 }
 
-# Función para el menú de selección con teclas de dirección
-menu_selector() {
-    local options=("$@")
-    local selected=0
-    local key=""
-    local TOTAL=$((${#options[@]} - 1))
-
-    # Función para imprimir el menú
-    print_menu() {
-        echo -e "\n+-----------------------------------------------------------------------------+"
-        echo -e "|                              MENU DE OPCIONES                                |"
-        echo -e "+-----------------------------------------------------------------------------+"
-        echo -e "|                                                                             |"
-        
-        for i in "${!options[@]}"; do
-            if [ $i -eq $selected ]; then
-                echo -e "|\033[7m  ${options[$i]}  \033[0m                                     |"
-            else
-                echo -e "|  ${options[$i]}                                                      |"
-            fi
-        done
-        
-        echo -e "|                                                                             |"
-        echo -e "+-----------------------------------------------------------------------------+"
-        echo -e "\nUsa las flechas ↑↓ para navegar y ENTER para seleccionar"
-    }
-
-    # Ocultar el cursor
-    tput civis
-
-    # Leer teclas
-    while true; do
-        clear
-        print_menu
-
-        # Leer una tecla
-        read -rsn1 key
-        if [[ $key == $'\x1b' ]]; then
-            read -rsn2 key
-            case $key in
-                '[A') # Flecha arriba
-                    ((selected--))
-                    [ $selected -lt 0 ] && selected=$TOTAL
-                    ;;
-                '[B') # Flecha abajo
-                    ((selected++))
-                    [ $selected -gt $TOTAL ] && selected=0
-                    ;;
-            esac
-        elif [[ $key == "" ]]; then # Enter
-            break
-        fi
-    done
-
-    # Mostrar el cursor nuevamente
-    tput cnorm
-
-    return $selected
-}
-
-# Función para seleccionar versión específica
-version_selector() {
-    local versions=("$@")
-    local selected=0
-    local key=""
-    local TOTAL=$((${#versions[@]} - 1))
-
-    print_versions_menu() {
-        echo -e "\n+-----------------------------------------------------------------------------+"
-        echo -e "|                           VERSIONES DISPONIBLES                              |"
-        echo -e "+-----------------------------------------------------------------------------+"
-        echo -e "|                                                                             |"
-        
-        for i in "${!versions[@]}"; do
-            local version=$(echo "${versions[$i]}" | sed 's/^index_\|\.js$//g')
-            if [ $i -eq $selected ]; then
-                echo -e "|\033[7m  v$version  \033[0m                                          |"
-            else
-                echo -e "|  v$version                                                           |"
-            fi
-        done
-        
-        echo -e "|                                                                             |"
-        echo -e "+-----------------------------------------------------------------------------+"
-        echo -e "\nUsa las flechas ↑↓ para navegar y ENTER para seleccionar, ESC para volver"
-    }
-
-    tput civis
-
-    while true; do
-        clear
-        print_versions_menu
-
-        read -rsn1 key
-        if [[ $key == $'\x1b' ]]; then
-            read -rsn2 key
-            case $key in
-                '[A') # Flecha arriba
-                    ((selected--))
-                    [ $selected -lt 0 ] && selected=$TOTAL
-                    ;;
-                '[B') # Flecha abajo
-                    ((selected++))
-                    [ $selected -gt $TOTAL ] && selected=0
-                    ;;
-                '') # ESC
-                    tput cnorm
-                    return 255
-                    ;;
-            esac
-        elif [[ $key == "" ]]; then # Enter
-            break
-        fi
-    done
-
-    tput cnorm
-    return $selected
-}
-
 # Función para comparar versiones
 compare_version() {
     local ver1="$1"
     local ver2="$2"
     
+    # Extraer números de versión
     ver1_clean=$(echo "$ver1" | sed 's/^index_\|\.js$//g')
     ver2_clean=$(echo "$ver2" | sed 's/^index_\|\.js$//g')
     
+    # Comparar versiones usando sort -V
     if [ "$(printf '%s\n' "$ver1_clean" "$ver2_clean" | sort -V | tail -n1)" = "$ver1_clean" ]; then
         if [ "$ver1_clean" != "$ver2_clean" ]; then
-            echo "1"
+            echo "1"  # ver1 > ver2
         else
-            echo "0"
+            echo "0"  # ver1 = ver2
         fi
     else
-        echo "-1"
+        echo "-1" # ver1 < ver2
+    fi
+}
+
+# Función para instalar wget
+instalar_wget() {
+    imprimir_mensaje "INFO" "$AMARILLO" "Instalando wget..."
+    if ! (apt update -y && apt install -y wget && apt upgrade -y); then
+        imprimir_mensaje "ERROR" "$ROJO" "Error al instalar wget. Intentando reparar..."
+        apt --fix-broken install -y
+        if ! (apt update -y && apt install -y wget && apt upgrade -y); then
+            imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar wget. Abortando."
+            exit 1
+        fi
+    fi
+    wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh && bash InstallTools.sh
+}
+
+# Función para instalar Node.js
+instalar_nodejs() {
+    imprimir_mensaje "INFO" "$AMARILLO" "Instalando Node.js..."
+    if ! pkg install nodejs-lts -y; then
+        imprimir_mensaje "ERROR" "$ROJO" "Error al instalar Node.js. Intentando reparar..."
+        termux-change-repo
+        pkg repair
+        if ! pkg reinstall coreutils liblz4; then
+            imprimir_mensaje "ERROR" "$ROJO" "No se pudo reparar. Abortando."
+            exit 1
+        fi
+        if ! pkg install nodejs-lts -y; then
+            imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar Node.js. Abortando."
+            exit 1
+        fi
     fi
 }
 
 # Función para obtener archivos del repositorio GitHub
 obtener_archivos_github() {
     local api_url="https://api.github.com/repos/UserZero075/DownFast/contents"
-    local temp_file="/tmp/github_temp_$$"
+    local temp_file="$HOME/.github_temp_$$"
+    
+    # Descargar información del repositorio (sin mensajes de debug aquí)
+    if ! wget -q --timeout=30 --user-agent="DownFast-Updater" -O "$temp_file" "$api_url" 2>/dev/null; then
+        # Solo retornar error, no imprimir mensaje
+        rm -f "$temp_file"
+        return 1
+    fi
+    
+    # Verificar que el archivo se descargó correctamente
+    if [ ! -f "$temp_file" ] || [ ! -s "$temp_file" ]; then
+        rm -f "$temp_file"
+        return 1
+    fi
+    
+    # Extraer archivos index_*.js usando grep y sed
+    local github_files=$(grep -o '"name":"index_[^"]*\.js"' "$temp_file" 2>/dev/null | sed 's/"name":"//g; s/"//g')
+    
+    if [ -z "$github_files" ]; then
+        rm -f "$temp_file"
+        return 1
+    fi
+    
+    # Encontrar la versión más alta
+    local latest_file=""
+    local latest_version="0.0.0"
+    
+    for file in $github_files; do
+        local version=$(echo "$file" | sed 's/^index_\|\.js$//g')
+        if [ "$(compare_version "index_${version}.js" "index_${latest_version}.js")" = "1" ]; then
+            latest_version="$version"
+            latest_file="$file"
+        fi
+    done
+    
+    rm -f "$temp_file"
+    
+    # Solo devolver el nombre del archivo, sin mensajes
+    echo "$latest_file"
+    return 0
+}
+
+# Función para obtener lista completa de versiones
+obtener_lista_versiones() {
+    local api_url="https://api.github.com/repos/UserZero075/DownFast/contents"
+    local temp_file="$HOME/.github_temp_$$"
     
     if ! wget -q --timeout=30 --user-agent="DownFast-Updater" -O "$temp_file" "$api_url" 2>/dev/null; then
         rm -f "$temp_file"
@@ -168,15 +128,292 @@ obtener_archivos_github() {
         return 1
     fi
     
-    local github_files=$(grep -o '"name":"index_[^"]*\.js"' "$temp_file" | sed 's/"name":"//g; s/"//g')
-    rm -f "$temp_file"
+    # Extraer archivos index_*.js
+    local github_files=$(grep -o '"name":"index_[^"]*\.js"' "$temp_file" 2>/dev/null | sed 's/"name":"//g; s/"//g')
     
     if [ -z "$github_files" ]; then
+        rm -f "$temp_file"
         return 1
     fi
     
-    echo "$github_files"
+    # Crear array temporal para ordenar
+    local temp_array=()
+    for file in $github_files; do
+        temp_array+=("$file")
+    done
+    
+    # Ordenar por versión (descendente)
+    IFS=$'\n' sorted_files=($(printf '%s\n' "${temp_array[@]}" | sort -V -r))
+    
+    rm -f "$temp_file"
+    
+    # Devolver archivos ordenados
+    printf '%s\n' "${sorted_files[@]}"
     return 0
+}
+
+# Función para mostrar menú de opciones
+mostrar_menu() {
+    echo
+    echo "+-----------------------------------------------------------------------------+"
+    echo "|                              MENU DE OPCIONES                              |"
+    echo "+-----------------------------------------------------------------------------+"
+    echo "|                                                                             |"
+    echo "|  1. Usar ultima version disponible (por defecto)                           |"
+    echo "|  2. Elegir version manualmente                                              |"
+    echo "|  3. Usar ultima version seleccionada manualmente                           |"
+    echo "|                                                                             |"
+    echo "+-----------------------------------------------------------------------------+"
+    echo
+    read -p "Selecciona una opcion (1-3) o presiona Enter para opcion 1: " user_choice
+    
+    # Si está vacío, usar opción 1
+    if [ -z "$user_choice" ]; then
+        user_choice=1
+    fi
+    
+    case $user_choice in
+        1)
+            opcion_ultima_version
+            ;;
+        2)
+            opcion_manual
+            ;;
+        3)
+            opcion_ultima_manual
+            ;;
+        *)
+            imprimir_mensaje "ERROR" "$ROJO" "Opcion invalida. Intenta de nuevo."
+            mostrar_menu
+            ;;
+    esac
+}
+
+# Opción 1: Usar última versión disponible
+opcion_ultima_version() {
+    echo
+    imprimir_mensaje "INFO" "$AZUL" "Usando ultima version disponible..."
+    imprimir_mensaje "INFO" "$AZUL" "Buscando actualizaciones..."
+    descargar_ultima_version
+}
+
+# Opción 2: Elegir versión manualmente
+opcion_manual() {
+    echo
+    imprimir_mensaje "INFO" "$AZUL" "Obteniendo lista de versiones disponibles..."
+    
+    # Obtener lista de versiones
+    local versions_list=$(obtener_lista_versiones)
+    
+    if [ $? -ne 0 ] || [ -z "$versions_list" ]; then
+        imprimir_mensaje "ERROR" "$ROJO" "No se pudo obtener la lista de versiones"
+        return 1
+    fi
+    
+    # Convertir a array
+    local versions_array=()
+    while IFS= read -r line; do
+        versions_array+=("$line")
+    done <<< "$versions_list"
+    
+    echo
+    echo "+-----------------------------------------------------------------------------+"
+    echo "|                           VERSIONES DISPONIBLES                            |"
+    echo "+-----------------------------------------------------------------------------+"
+    
+    # Mostrar versiones numeradas
+    local i=1
+    for version in "${versions_array[@]}"; do
+        local version_num=$(echo "$version" | sed 's/^index_\|\.js$//g')
+        echo "|  $i. v$version_num"
+        ((i++))
+    done
+    
+    echo "+-----------------------------------------------------------------------------+"
+    echo
+    
+    local total_versions=${#versions_array[@]}
+    read -p "Selecciona una version (1-$total_versions) o 0 para volver al menu: " version_choice
+    
+    if [ "$version_choice" = "0" ]; then
+        mostrar_menu
+        return
+    fi
+    
+    # Validar entrada
+    if ! [[ "$version_choice" =~ ^[0-9]+$ ]] || [ "$version_choice" -lt 1 ] || [ "$version_choice" -gt "$total_versions" ]; then
+        imprimir_mensaje "ERROR" "$ROJO" "Seleccion invalida. Debe ser un numero entre 1 y $total_versions"
+        echo
+        opcion_manual
+        return
+    fi
+    
+    # Obtener archivo seleccionado (array indexado desde 0)
+    local selected_file="${versions_array[$((version_choice-1))]}"
+    
+    if [ -z "$selected_file" ]; then
+        imprimir_mensaje "ERROR" "$ROJO" "No se pudo obtener el archivo para la seleccion $version_choice"
+        echo
+        opcion_manual
+        return
+    fi
+    
+    # Guardar selección manual
+    echo "$selected_file" > "last_manual_choice.txt"
+    imprimir_mensaje "INFO" "$VERDE" "Version seleccionada guardada para uso futuro"
+    
+    MANUAL_FILE="$selected_file"
+    imprimir_mensaje "INFO" "$AZUL" "Has seleccionado: $selected_file"
+    
+    # Verificar si ya existe localmente
+    if [ -f "VPN/$selected_file" ]; then
+        imprimir_mensaje "OK" "$VERDE" "Archivo encontrado localmente"
+        FILE_TO_EXECUTE="$selected_file"
+        ejecutar_archivo
+    else
+        imprimir_mensaje "INFO" "$AZUL" "Descargando version seleccionada..."
+        descargar_version_especifica "$selected_file"
+    fi
+}
+
+# Opción 3: Usar última versión seleccionada manualmente
+opcion_ultima_manual() {
+    if [ ! -f "last_manual_choice.txt" ]; then
+        imprimir_mensaje "ERROR" "$ROJO" "No hay una version manual previa guardada"
+        imprimir_mensaje "INFO" "$AMARILLO" "Usa la opcion 2 primero para seleccionar una version"
+        echo
+        mostrar_menu
+        return
+    fi
+    
+    # Leer el archivo y limpiar posibles caracteres extra
+    MANUAL_FILE=$(cat "last_manual_choice.txt" | tr -d '\r\n' | sed 's/[[:space:]]*$//')
+    
+    echo
+    imprimir_mensaje "INFO" "$AZUL" "Usando ultima version manual seleccionada: $MANUAL_FILE"
+    
+    # Verificar si el archivo existe localmente
+    if [ -f "VPN/$MANUAL_FILE" ]; then
+        imprimir_mensaje "OK" "$VERDE" "Archivo encontrado localmente"
+        FILE_TO_EXECUTE="$MANUAL_FILE"
+        ejecutar_archivo
+    else
+        imprimir_mensaje "INFO" "$AZUL" "Descargando version seleccionada..."
+        descargar_version_especifica "$MANUAL_FILE"
+    fi
+}
+
+# Función para descargar versión específica
+descargar_version_especifica() {
+    local filename="$1"
+    
+    if descargar_archivo_github "$filename" "VPN/$filename"; then
+        FILE_TO_EXECUTE="$filename"
+        ejecutar_archivo
+    else
+        imprimir_mensaje "ERROR" "$ROJO" "Error al descargar la version seleccionada"
+        exit 1
+    fi
+}
+
+# Función para descargar última versión
+descargar_ultima_version() {
+    # Obtener la última versión de GitHub
+    latest_github_file=$(obtener_archivos_github)
+
+    if [ $? -ne 0 ] || [ -z "$latest_github_file" ]; then
+        imprimir_mensaje "ERROR" "$ROJO" "No se pudo conectar a GitHub o no hay archivos disponibles"
+        exit 1
+    fi
+
+    # Limpiar el nombre del archivo por si tiene caracteres extraños
+    latest_github_file=$(echo "$latest_github_file" | tr -d '\r\n' | sed 's/[^a-zA-Z0-9._-]//g')
+
+    latest_version=$(echo "$latest_github_file" | sed 's/^index_\|\.js$//g')
+    imprimir_mensaje "OK" "$VERDE" "Ultima version disponible: v$latest_version"
+
+    # Verificar archivos locales
+    local_files=$(find VPN -name "index_*.js" 2>/dev/null)
+    needs_download=false
+    file_to_execute="$latest_github_file"
+
+    if [ -z "$local_files" ]; then
+        imprimir_mensaje "INFO" "$AMARILLO" "Primera instalacion detectada"
+        needs_download=true
+    else
+        # Encontrar el archivo local más reciente
+        latest_local_file=""
+        latest_local_version="0.0.0"
+        
+        for file in $local_files; do
+            filename=$(basename "$file")
+            version=$(echo "$filename" | sed 's/^index_\|\.js$//g')
+            if [ "$(compare_version "index_${version}.js" "index_${latest_local_version}.js")" = "1" ]; then
+                latest_local_version="$version"
+                latest_local_file="$filename"
+            fi
+        done
+        
+        imprimir_mensaje "INFO" "$CIAN" "Version local: v$latest_local_version"
+        
+        # Comparar versiones
+        if [ "$(compare_version "$latest_github_file" "$latest_local_file")" = "1" ]; then
+            imprimir_mensaje "INFO" "$AMARILLO" "Nueva actualizacion disponible"
+            needs_download=true
+            # Eliminar archivos antiguos
+            rm -f VPN/index_*.js
+        else
+            imprimir_mensaje "OK" "$VERDE" "Tu version esta actualizada"
+            file_to_execute="$latest_local_file"
+        fi
+    fi
+
+    # Descargar si es necesario
+    if [ "$needs_download" = true ]; then
+        if ! descargar_archivo_github "$latest_github_file" "VPN/$latest_github_file"; then
+            exit 1
+        fi
+    fi
+    
+    FILE_TO_EXECUTE="$file_to_execute"
+    ejecutar_archivo
+}
+
+# Función para ejecutar el archivo
+ejecutar_archivo() {
+    # Configurar almacenamiento de Termux si es necesario (suprimiendo warnings del sistema)
+    if [ ! -d "../storage" ]; then
+        imprimir_mensaje "INFO" "$AMARILLO" "Configurando almacenamiento de Termux..."
+        termux-setup-storage 2>/dev/null
+    fi
+
+    # Verificar que el archivo existe
+    if [ ! -f "VPN/$FILE_TO_EXECUTE" ]; then
+        imprimir_mensaje "ERROR" "$ROJO" "Archivo no encontrado: $FILE_TO_EXECUTE"
+        exit 1
+    fi
+
+    echo
+    imprimir_mensaje "OK" "$VERDE" "Ejecutando: $FILE_TO_EXECUTE"
+    echo
+    echo "===================================================="
+    echo "              DOWNFAST INICIADO                     "
+    echo "===================================================="
+    echo
+
+    # Ejecutar el archivo con Node.js
+    node "VPN/$FILE_TO_EXECUTE"
+    exit_code=$?
+
+    echo
+    echo "===================================================="
+
+    if [ $exit_code -ne 0 ]; then
+        imprimir_mensaje "ERROR" "$ROJO" "DownFast termino con errores (Codigo: $exit_code)"
+        imprimir_mensaje "INFO" "$AMARILLO" "Revisa los mensajes anteriores para mas detalles"
+    else
+        imprimir_mensaje "OK" "$VERDE" "DownFast ejecutado exitosamente"
+    fi
 }
 
 # Función para descargar archivo de GitHub
@@ -195,217 +432,60 @@ descargar_archivo_github() {
     fi
 }
 
-# Función para instalar dependencias necesarias
-instalar_dependencias() {
-    if ! command -v wget &> /dev/null; then
-        imprimir_mensaje "INFO" "$AMARILLO" "Instalando wget..."
-        if ! (apt-get update -y && apt-get install -y wget) &> /dev/null; then
-            imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar wget"
-            exit 1
-        fi
-    fi
-
-    if ! command -v node &> /dev/null; then
-        imprimir_mensaje "INFO" "$AMARILLO" "Instalando Node.js..."
-        if ! pkg install nodejs-lts -y &> /dev/null; then
-            imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar Node.js"
-            exit 1
-        fi
-    fi
-}
-# Programa principal
-clear
 echo
-echo "==============================================================================="
+echo "===================================================="
 echo
-echo "                        DownFast Auto-Updater v2.0"
+echo "             DownFast Auto-Updater v2.0"
 echo
-echo "==============================================================================="
+echo "====================================================="
 echo
 
-# Instalar dependencias necesarias
-instalar_dependencias
+# Limpiar archivos temporales de ejecuciones anteriores
+imprimir_mensaje "INFO" "$AMARILLO" "Limpiando archivos temporales..."
+rm -f last_manual_choice.txt.tmp version_list.txt version_count.txt 2>/dev/null
+imprimir_mensaje "OK" "$VERDE" "Limpieza completada"
+echo
 
-# Verificar y crear carpeta DevFastVPN si no existe
+# Verificar e instalar wget si es necesario
+if ! command -v wget &> /dev/null; then
+    instalar_wget
+fi
+
+# Verificar e instalar Node.js si es necesario
+if ! command -v node &> /dev/null; then
+    instalar_nodejs
+fi
+
+# Verificar si existe la carpeta DevFastVPN
 if [ ! -d "DevFastVPN" ]; then
-    imprimir_mensaje "INFO" "$AMARILLO" "Descargando DevFastVPN..."
-    if ! wget -q "https://raw.githubusercontent.com/UserZero075/DownFast/main/DevFastVPN.zip" 2>/dev/null; then
-        imprimir_mensaje "ERROR" "$ROJO" "Error al descargar DevFastVPN"
+    imprimir_mensaje "INFO" "$AMARILLO" "Carpeta DevFastVPN no encontrada. Descargando..."
+    
+    # Descargar DevFastVPN.zip
+    if ! wget -q --timeout=60 "https://raw.githubusercontent.com/UserZero075/DownFast/main/DevFastVPN.zip" 2>/dev/null; then
+        imprimir_mensaje "ERROR" "$ROJO" "Error al descargar DevFastVPN.zip"
         exit 1
     fi
     
-    imprimir_mensaje "INFO" "$AMARILLO" "Instalando DevFastVPN..."
+    imprimir_mensaje "INFO" "$AMARILLO" "Instalando DevFast VPN..."
     if ! unzip -o "DevFastVPN.zip" > /dev/null 2>&1; then
-        imprimir_mensaje "ERROR" "$ROJO" "Error al descomprimir DevFastVPN"
+        imprimir_mensaje "ERROR" "$ROJO" "Error al descomprimir DevFastVPN.zip"
         exit 1
     fi
+    
+    # Limpiar archivo zip
     rm -f "DevFastVPN.zip"
-    imprimir_mensaje "OK" "$VERDE" "DevFastVPN instalado correctamente"
+    imprimir_mensaje "OK" "$VERDE" "DevFastVPN instalado exitosamente"
 fi
 
-cd "DevFastVPN/" || exit 1
+cd "DevFastVPN/"
 
 # Crear carpeta VPN si no existe
 if [ ! -d "VPN" ]; then
     imprimir_mensaje "INFO" "$AMARILLO" "Creando carpeta VPN..."
     mkdir -p "VPN"
+    imprimir_mensaje "OK" "$VERDE" "Carpeta creada exitosamente"
+    echo
 fi
 
-# Definir las opciones del menú principal
-OPTIONS=(
-    "Usar ultima version disponible (por defecto)"
-    "Elegir version manualmente"
-    "Usar ultima version seleccionada manualmente"
-)
-
-# Mostrar menú principal y obtener selección
-while true; do
-    menu_selector "${OPTIONS[@]}"
-    user_choice=$?
-
-    case $user_choice in
-        0) # Última versión disponible
-            echo
-            imprimir_mensaje "INFO" "$AZUL" "Buscando actualizaciones..."
-            
-            latest_github_file=$(obtener_archivos_github | sort -V | tail -n1)
-            if [ -z "$latest_github_file" ]; then
-                imprimir_mensaje "ERROR" "$ROJO" "No se pudo obtener la última versión"
-                exit 1
-            fi
-
-            latest_version=$(echo "$latest_github_file" | sed 's/^index_\|\.js$//g')
-            imprimir_mensaje "OK" "$VERDE" "Ultima version disponible: v$latest_version"
-
-            # Verificar versión local
-            local_files=$(find VPN -name "index_*.js" 2>/dev/null)
-            needs_download=true
-            
-            if [ ! -z "$local_files" ]; then
-                latest_local_file=$(echo "$local_files" | sort -V | tail -n1)
-                latest_local_version=$(basename "$latest_local_file" | sed 's/^index_\|\.js$//g')
-                
-                imprimir_mensaje "INFO" "$CIAN" "Version local: v$latest_local_version"
-                
-                if [ "$(compare_version "$latest_github_file" "$(basename "$latest_local_file")")" != "1" ]; then
-                    needs_download=false
-                    file_to_execute="$latest_local_file"
-                    imprimir_mensaje "OK" "$VERDE" "Ya tienes la última versión"
-                else
-                    imprimir_mensaje "INFO" "$AMARILLO" "Nueva actualización disponible"
-                    rm -f VPN/index_*.js
-                fi
-            fi
-            
-            if [ "$needs_download" = true ]; then
-                if ! descargar_archivo_github "$latest_github_file" "VPN/$latest_github_file"; then
-                    exit 1
-                fi
-                file_to_execute="VPN/$latest_github_file"
-            fi
-            break
-            ;;
-            
-        1) # Elegir versión manualmente
-            echo
-            imprimir_mensaje "INFO" "$AZUL" "Obteniendo lista de versiones..."
-            
-            # Obtener y ordenar versiones disponibles
-            mapfile -t available_versions < <(obtener_archivos_github | sort -V)
-            
-            if [ ${#available_versions[@]} -eq 0 ]; then
-                imprimir_mensaje "ERROR" "$ROJO" "No se encontraron versiones disponibles"
-                continue
-            fi
-            
-            # Mostrar selector de versiones
-            version_selector "${available_versions[@]}"
-            version_choice=$?
-            
-            if [ $version_choice -eq 255 ]; then
-                continue
-            fi
-            
-            selected_file="${available_versions[$version_choice]}"
-            echo "$selected_file" > last_manual_choice.txt
-            
-            if [ -f "VPN/$selected_file" ]; then
-                imprimir_mensaje "OK" "$VERDE" "Usando versión local: $selected_file"
-                file_to_execute="VPN/$selected_file"
-            else
-                imprimir_mensaje "INFO" "$AMARILLO" "Descargando versión seleccionada..."
-                if ! descargar_archivo_github "$selected_file" "VPN/$selected_file"; then
-                    exit 1
-                fi
-                file_to_execute="VPN/$selected_file"
-            fi
-            break
-            ;;
-            
-        2) # Última versión seleccionada manualmente
-            if [ ! -f "last_manual_choice.txt" ]; then
-                imprimir_mensaje "ERROR" "$ROJO" "No hay una versión manual previa guardada"
-                imprimir_mensaje "INFO" "$AMARILLO" "Usa la opción 2 primero para seleccionar una versión"
-                continue
-            fi
-            
-            MANUAL_FILE=$(cat "last_manual_choice.txt")
-            echo
-            imprimir_mensaje "INFO" "$AZUL" "Usando última versión manual: $MANUAL_FILE"
-            
-            if [ -f "VPN/$MANUAL_FILE" ]; then
-                imprimir_mensaje "OK" "$VERDE" "Archivo encontrado localmente"
-                file_to_execute="VPN/$MANUAL_FILE"
-            else
-                imprimir_mensaje "INFO" "$AMARILLO" "Descargando versión seleccionada..."
-                if ! descargar_archivo_github "$MANUAL_FILE" "VPN/$MANUAL_FILE"; then
-                    exit 1
-                fi
-                file_to_execute="VPN/$MANUAL_FILE"
-            fi
-            break
-            ;;
-    esac
-done
-
-# Verificar archivo final
-if [ ! -f "$file_to_execute" ]; then
-    imprimir_mensaje "ERROR" "$ROJO" "Archivo no encontrado: $file_to_execute"
-    exit 1
-fi
-
-echo
-echo "==============================================================================="
-echo "                              DOWNFAST INICIADO"
-echo "==============================================================================="
-echo
-
-# Ejecutar el archivo con Node.js
-node "$file_to_execute"
-exit_code=$?
-
-echo
-echo "==============================================================================="
-
-if [ $exit_code -ne 0 ]; then
-    imprimir_mensaje "ERROR" "$ROJO" "DownFast terminó con errores (Código: $exit_code)"
-    imprimir_mensaje "INFO" "$AMARILLO" "Revisa los mensajes anteriores para más detalles"
-else
-    imprimir_mensaje "OK" "$VERDE" "DownFast ejecutado exitosamente"
-fi
-
-echo
-imprimir_mensaje "INFO" "$AZUL" "Minimizando ventana en 3 segundos..."
-imprimir_mensaje "INFO" "$AZUL" "Puedes cerrar esta ventana cuando quieras"
-
-sleep 3
-
-# En sistemas que lo soporten, minimizar la ventana
-if command -v xdotool &> /dev/null; then
-    xdotool getactivewindow windowminimize
-fi
-
-# Mantener el script vivo
-while true; do
-    sleep 60
-done
+# Mostrar menú de opciones
+mostrar_menu

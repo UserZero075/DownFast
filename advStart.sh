@@ -68,6 +68,170 @@ instalar_nodejs() {
     fi
 }
 
+# Función para leer teclas especiales
+leer_tecla() {
+    local key
+    IFS= read -rsn1 key 2>/dev/null >&2
+    if [[ $key = $'\x1b' ]]; then
+        read -rsn2 key 2>/dev/null >&2
+        case $key in
+            '[A') echo "UP" ;;
+            '[B') echo "DOWN" ;;
+            '[C') echo "RIGHT" ;;
+            '[D') echo "LEFT" ;;
+        esac
+    elif [[ $key = $'\x0a' ]] || [[ $key = $'\x0d' ]]; then
+        echo "ENTER"
+    elif [[ $key = $'\x1b' ]]; then
+        echo "ESC"
+    elif [[ $key = 'q' ]] || [[ $key = 'Q' ]]; then
+        echo "QUIT"
+    else
+        echo "OTHER"
+    fi
+}
+
+# Función para mostrar menú con navegación por flechas
+mostrar_menu_navegable() {
+    local opciones=("Usar ultima version disponible (por defecto)" "Elegir version manualmente" "Usar ultima version seleccionada manualmente")
+    local seleccionado=0
+    local total_opciones=${#opciones[@]}
+    
+    while true; do
+        clear
+        echo
+        echo "==============================================="
+        echo
+        echo "            DownFast Auto-Updater v2.0"
+        echo
+        echo "================================================"
+        echo
+        echo "================================================"
+        echo "             MENU DE OPCIONES"
+        echo "================================================"
+        
+        for i in "${!opciones[@]}"; do
+            if [ $i -eq $seleccionado ]; then
+                echo -e "|  ${VERDE}► $((i+1)). ${opciones[i]}${NC}"
+            else
+                echo "|    $((i+1)). ${opciones[i]}"
+            fi
+        done
+        
+        echo "================================================"
+        echo
+        echo -e "${AMARILLO}Usa las flechas ↑↓ para navegar, Enter para seleccionar, 'q' para salir${NC}"
+        
+        local tecla=$(leer_tecla)
+        
+        case $tecla in
+            "UP")
+                ((seleccionado--))
+                if [ $seleccionado -lt 0 ]; then
+                    seleccionado=$((total_opciones-1))
+                fi
+                ;;
+            "DOWN")
+                ((seleccionado++))
+                if [ $seleccionado -ge $total_opciones ]; then
+                    seleccionado=0
+                fi
+                ;;
+            "ENTER")
+                case $seleccionado in
+                    0) opcion_ultima_version ;;
+                    1) opcion_manual ;;
+                    2) opcion_ultima_manual ;;
+                esac
+                break
+                ;;
+            "QUIT")
+                echo
+                imprimir_mensaje "INFO" "$AMARILLO" "Saliendo..."
+                exit 0
+                ;;
+        esac
+    done
+}
+
+# Función para mostrar versiones con navegación por flechas
+mostrar_versiones_navegable() {
+    local versions_array=("$@")
+    local seleccionado=0
+    local total_versiones=${#versions_array[@]}
+    
+    # Obtener información de commits para todas las versiones
+    local commit_info_array=()
+    for version in "${versions_array[@]}"; do
+        local commit_info=$(obtener_commit_info "$version")
+        commit_info_array+=("$commit_info")
+    done
+    
+    while true; do
+        clear
+        echo
+        echo "================================================"
+        echo "             VERSIONES DISPONIBLES      "
+        echo "================================================"
+        
+        for i in "${!versions_array[@]}"; do
+            local version_num=$(echo "${versions_array[i]}" | sed 's/^index_\|\.js$//g')
+            if [ $i -eq $seleccionado ]; then
+                echo -e "|  ${VERDE}► $((i+1)). v$version_num - ${commit_info_array[i]}${NC}"
+            else
+                echo "|    $((i+1)). v$version_num - ${commit_info_array[i]}"
+            fi
+        done
+        
+        echo "================================================"
+        echo
+        echo -e "${AMARILLO}Usa las flechas ↑↓ para navegar, Enter para seleccionar, 'q' para volver al menú${NC}"
+        
+        local tecla=$(leer_tecla)
+        
+        case $tecla in
+            "UP")
+                ((seleccionado--))
+                if [ $seleccionado -lt 0 ]; then
+                    seleccionado=$((total_versiones-1))
+                fi
+                ;;
+            "DOWN")
+                ((seleccionado++))
+                if [ $seleccionado -ge $total_versiones ]; then
+                    seleccionado=0
+                fi
+                ;;
+            "ENTER")
+                local selected_file="${versions_array[seleccionado]}"
+                
+                # Guardar selección manual
+                echo "$selected_file" > "last_manual_choice.txt"
+                clear
+                imprimir_mensaje "INFO" "$VERDE" "Version seleccionada guardada para uso futuro"
+                
+                MANUAL_FILE="$selected_file"
+                imprimir_mensaje "INFO" "$AZUL" "Has seleccionado: $selected_file"
+                
+                # Verificar si ya existe localmente
+                if [ -f "VPN/$selected_file" ]; then
+                    imprimir_mensaje "OK" "$VERDE" "Archivo encontrado localmente"
+                    FILE_TO_EXECUTE="$selected_file"
+                    ejecutar_archivo
+                else
+                    imprimir_mensaje "INFO" "$AZUL" "Descargando version seleccionada..."
+                    descargar_version_especifica "$selected_file"
+                fi
+                return
+                ;;
+            "QUIT")
+                mostrar_menu_navegable
+                return
+                ;;
+        esac
+    done
+}
+
 # Función para obtener archivos del repositorio GitHub
 obtener_archivos_github() {
     local api_url="https://api.github.com/repos/UserZero075/DownFast/contents"
@@ -152,56 +316,11 @@ obtener_lista_versiones() {
     return 0
 }
 
-# Función para mostrar menú de opciones
-mostrar_menu() {
-    echo
-    echo "+-----------------------------------------------------------------------------+"
-    echo "|                              MENU DE OPCIONES                              |"
-    echo "+-----------------------------------------------------------------------------+"
-    echo "|                                                                             |"
-    echo "|  1. Usar ultima version disponible (por defecto)                           |"
-    echo "|  2. Elegir version manualmente                                              |"
-    echo "|  3. Usar ultima version seleccionada manualmente                           |"
-    echo "|                                                                             |"
-    echo "+-----------------------------------------------------------------------------+"
-    echo
-    read -p "Selecciona una opcion (1-3) o presiona Enter para opcion 1: " user_choice
-    
-    # Si está vacío, usar opción 1
-    if [ -z "$user_choice" ]; then
-        user_choice=1
-    fi
-    
-    case $user_choice in
-        1)
-            opcion_ultima_version
-            ;;
-        2)
-            opcion_manual
-            ;;
-        3)
-            opcion_ultima_manual
-            ;;
-        *)
-            imprimir_mensaje "ERROR" "$ROJO" "Opcion invalida. Intenta de nuevo."
-            mostrar_menu
-            ;;
-    esac
-}
-
-# Opción 1: Usar última versión disponible
-opcion_ultima_version() {
-    echo
-    imprimir_mensaje "INFO" "$AZUL" "Usando ultima version disponible..."
-    imprimir_mensaje "INFO" "$AZUL" "Buscando actualizaciones..."
-    descargar_ultima_version
-}
-
 # Función para obtener información de commit
 obtener_commit_info() {
     local filename="$1"
     local commit_url="https://api.github.com/repos/UserZero075/DownFast/commits?path=$filename&per_page=1"
-    local temp_commit_file="$HOME/.commit_temp_$"
+    local temp_commit_file="$HOME/.commit_temp_$$"
     
     # Intentar obtener información del commit con timeout corto
     if wget -q --timeout=8 --user-agent="DownFast-Updater" -O "$temp_commit_file" "$commit_url" 2>/dev/null; then
@@ -229,8 +348,23 @@ obtener_commit_info() {
     rm -f "$temp_commit_file"
 }
 
+# Función para mostrar menú de opciones (mantener compatibilidad)
+mostrar_menu() {
+    mostrar_menu_navegable
+}
+
+# Opción 1: Usar última versión disponible
+opcion_ultima_version() {
+    clear
+    echo
+    imprimir_mensaje "INFO" "$AZUL" "Usando ultima version disponible..."
+    imprimir_mensaje "INFO" "$AZUL" "Buscando actualizaciones..."
+    descargar_ultima_version
+}
+
 # Opción 2: Elegir versión manualmente
 opcion_manual() {
+    clear
     echo
     imprimir_mensaje "INFO" "$AZUL" "Obteniendo lista de versiones disponibles..."
     
@@ -239,6 +373,8 @@ opcion_manual() {
     
     if [ $? -ne 0 ] || [ -z "$versions_list" ]; then
         imprimir_mensaje "ERROR" "$ROJO" "No se pudo obtener la lista de versiones"
+        read -p "Presiona Enter para volver al menu..." 
+        mostrar_menu_navegable
         return 1
     fi
     
@@ -248,77 +384,19 @@ opcion_manual() {
         versions_array+=("$line")
     done <<< "$versions_list"
     
-    echo
-    echo "+-----------------------------------------------------------------------------+"
-    echo "|                           VERSIONES DISPONIBLES                            |"
-    echo "+-----------------------------------------------------------------------------+"
-    
-    # Mostrar versiones numeradas con información de commit
-    local i=1
-    for version in "${versions_array[@]}"; do
-        local version_num=$(echo "$version" | sed 's/^index_\|\.js$//g')
-        
-        # Obtener información del commit
-        local commit_info=$(obtener_commit_info "$version")
-        
-        echo "|  $i. v$version_num - $commit_info"
-        ((i++))
-    done
-    
-    echo "+-----------------------------------------------------------------------------+"
-    echo
-    
-    local total_versions=${#versions_array[@]}
-    read -p "Selecciona una version (1-$total_versions) o 0 para volver al menu: " version_choice
-    
-    if [ "$version_choice" = "0" ]; then
-        mostrar_menu
-        return
-    fi
-    
-    # Validar entrada
-    if ! [[ "$version_choice" =~ ^[0-9]+$ ]] || [ "$version_choice" -lt 1 ] || [ "$version_choice" -gt "$total_versions" ]; then
-        imprimir_mensaje "ERROR" "$ROJO" "Seleccion invalida. Debe ser un numero entre 1 y $total_versions"
-        echo
-        opcion_manual
-        return
-    fi
-    
-    # Obtener archivo seleccionado (array indexado desde 0)
-    local selected_file="${versions_array[$((version_choice-1))]}"
-    
-    if [ -z "$selected_file" ]; then
-        imprimir_mensaje "ERROR" "$ROJO" "No se pudo obtener el archivo para la seleccion $version_choice"
-        echo
-        opcion_manual
-        return
-    fi
-    
-    # Guardar selecci��n manual
-    echo "$selected_file" > "last_manual_choice.txt"
-    imprimir_mensaje "INFO" "$VERDE" "Version seleccionada guardada para uso futuro"
-    
-    MANUAL_FILE="$selected_file"
-    imprimir_mensaje "INFO" "$AZUL" "Has seleccionado: $selected_file"
-    
-    # Verificar si ya existe localmente
-    if [ -f "VPN/$selected_file" ]; then
-        imprimir_mensaje "OK" "$VERDE" "Archivo encontrado localmente"
-        FILE_TO_EXECUTE="$selected_file"
-        ejecutar_archivo
-    else
-        imprimir_mensaje "INFO" "$AZUL" "Descargando version seleccionada..."
-        descargar_version_especifica "$selected_file"
-    fi
+    # Mostrar versiones con navegación
+    mostrar_versiones_navegable "${versions_array[@]}"
 }
 
 # Opción 3: Usar última versión seleccionada manualmente
 opcion_ultima_manual() {
+    clear
     if [ ! -f "last_manual_choice.txt" ]; then
         imprimir_mensaje "ERROR" "$ROJO" "No hay una version manual previa guardada"
         imprimir_mensaje "INFO" "$AMARILLO" "Usa la opcion 2 primero para seleccionar una version"
         echo
-        mostrar_menu
+        read -p "Presiona Enter para volver al menu..." 
+        mostrar_menu_navegable
         return
     fi
     
@@ -432,9 +510,9 @@ ejecutar_archivo() {
     echo
     imprimir_mensaje "OK" "$VERDE" "Ejecutando: $FILE_TO_EXECUTE"
     echo
-    echo "===================================================="
-    echo "              DOWNFAST INICIADO                     "
-    echo "===================================================="
+    echo "================================================"
+    echo "              DOWNFAST INICIADO        "
+    echo "================================================"
     echo
 
     # Ejecutar el archivo con Node.js
@@ -442,7 +520,7 @@ ejecutar_archivo() {
     exit_code=$?
 
     echo
-    echo "===================================================="
+    echo "================================================"
 
     if [ $exit_code -ne 0 ]; then
         imprimir_mensaje "ERROR" "$ROJO" "DownFast termino con errores (Codigo: $exit_code)"
@@ -469,11 +547,11 @@ descargar_archivo_github() {
 }
 
 echo
-echo "===================================================="
+echo "================================================"
 echo
-echo "             DownFast Auto-Updater v2.0"
+echo "         DownFast Auto-Updater v2.0"
 echo
-echo "====================================================="
+echo "================================================"
 echo
 
 # Limpiar archivos temporales de ejecuciones anteriores

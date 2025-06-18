@@ -197,6 +197,38 @@ opcion_ultima_version() {
     descargar_ultima_version
 }
 
+# Función para obtener información de commit
+obtener_commit_info() {
+    local filename="$1"
+    local commit_url="https://api.github.com/repos/UserZero075/DownFast/commits?path=$filename&per_page=1"
+    local temp_commit_file="$HOME/.commit_temp_$"
+    
+    # Intentar obtener información del commit con timeout corto
+    if wget -q --timeout=8 --user-agent="DownFast-Updater" -O "$temp_commit_file" "$commit_url" 2>/dev/null; then
+        if [ -f "$temp_commit_file" ] && [ -s "$temp_commit_file" ]; then
+            # Extraer el mensaje del commit
+            local commit_msg=$(grep -o '"message":"[^"]*"' "$temp_commit_file" 2>/dev/null | head -n1 | sed 's/"message":"//g; s/"//g' | sed 's/\\n.*//g')
+            
+            if [ -n "$commit_msg" ] && [ ${#commit_msg} -gt 0 ]; then
+                # Truncar mensaje si es muy largo
+                if [ ${#commit_msg} -gt 40 ]; then
+                    echo "${commit_msg:0:37}..."
+                else
+                    echo "$commit_msg"
+                fi
+            else
+                echo "Disponible para descarga"
+            fi
+        else
+            echo "Disponible para descarga"
+        fi
+    else
+        echo "Disponible para descarga"
+    fi
+    
+    rm -f "$temp_commit_file"
+}
+
 # Opción 2: Elegir versión manualmente
 opcion_manual() {
     echo
@@ -221,11 +253,15 @@ opcion_manual() {
     echo "|                           VERSIONES DISPONIBLES                            |"
     echo "+-----------------------------------------------------------------------------+"
     
-    # Mostrar versiones numeradas
+    # Mostrar versiones numeradas con información de commit
     local i=1
     for version in "${versions_array[@]}"; do
         local version_num=$(echo "$version" | sed 's/^index_\|\.js$//g')
-        echo "|  $i. v$version_num"
+        
+        # Obtener información del commit
+        local commit_info=$(obtener_commit_info "$version")
+        
+        echo "|  $i. v$version_num - $commit_info"
         ((i++))
     done
     
@@ -258,7 +294,7 @@ opcion_manual() {
         return
     fi
     
-    # Guardar selección manual
+    # Guardar selecci��n manual
     echo "$selected_file" > "last_manual_choice.txt"
     imprimir_mensaje "INFO" "$VERDE" "Version seleccionada guardada para uso futuro"
     

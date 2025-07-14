@@ -87,5 +87,5 @@ if [ ! -d "../storage" ]; then
 fi
 
 # Iniciar VPN
-imprimir_mensaje "ÉXITO" "$VERDE" "VPN DevFast activado!"
-node VPN/index.js
+imprimir_mensaje "ÉXITO" "$VERDE" "VPN DevFast activado e interfaz web corriendo en http://localhost:7568/download !"
+node server.js

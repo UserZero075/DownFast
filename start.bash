@@ -68,7 +68,7 @@ fi
 # Descargar y descomprimir VPN si es necesario
 if [ ! -f "$NOMBRE_ZIP" ]; then
     imprimir_mensaje "INFO" "$AMARILLO" "Descargando $NOMBRE_ZIP..."
-    wget "https://raw.githubusercontent.com/UserZero075/DownFast/main/android/VPN/$NOMBRE_ZIP"
+    wget "https://raw.githubusercontent.com/UserZero075/DownFast/$NOMBRE_ZIP"
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando VPN de DevFast..."
     unzip -o "$NOMBRE_ZIP" > /dev/null 2>&1
 fi

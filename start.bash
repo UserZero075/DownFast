@@ -81,10 +81,10 @@ if ! command -v node &> /dev/null; then
 fi
 
 # Configurar almacenamiento de Termux si es necesario
-#if [ ! -d "../storage" ]; then
- #   imprimir_mensaje "INFO" "$AMARILLO" "Configurando almacenamiento de Termux..."
-  #  termux-setup-storage
-#fi
+if [ ! -d "../storage" ]; then
+    imprimir_mensaje "INFO" "$AMARILLO" "Configurando almacenamiento de Termux..."
+    termux-setup-storage
+fi
 
 # Iniciar VPN
 imprimir_mensaje "ÉXITO" "$VERDE" "VPN DevFast activado e interfaz web corriendo en http://localhost:7568/download !"

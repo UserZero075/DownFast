@@ -34,10 +34,10 @@ instalar_wget() {
 }
 
 # Función para instalar MicroPython
-instalar_micropython() {
-    imprimir_mensaje "INFO" "$AMARILLO" "Instalando MicroPython (versión ligera)..."
-    if ! pkg install micropython -y; then
-        imprimir_mensaje "ERROR" "$ROJO" "Error al instalar MicroPython. Intentando reparar..."
+instalar_python3() {
+    imprimir_mensaje "INFO" "$AMARILLO" "Instalando Python3..."
+    if ! pkg install python3 -y; then
+        imprimir_mensaje "ERROR" "$ROJO" "Error al instalar Python3. Intentando reparar..."
         termux-change-repo
         pkg repair
         if ! pkg reinstall coreutils liblz4; then
@@ -45,7 +45,7 @@ instalar_micropython() {
             exit 1
         fi
         if ! pkg install micropython -y; then
-            imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar MicroPython. Abortando."
+            imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar Python3. Abortando."
             exit 1
         fi
     fi
@@ -66,9 +66,9 @@ fi
 
 cd "$CARPETA_VPN/"
 
-# Verificar e instalar MicroPython si es necesario
+# Verificar e instalar Python3 si es necesario
 if ! command -v micropython &> /dev/null; then
-    instalar_micropython
+    instalar_python3
 fi
 
 # Configurar almacenamiento de Termux si es necesario
@@ -79,4 +79,4 @@ fi
 
 # Iniciar VPN
 imprimir_mensaje "ÉXITO" "$VERDE" "VPN DevFast activado e interfaz web corriendo en http://localhost:7568/download !"
-micropython main.pyc
+python3 main.pyc

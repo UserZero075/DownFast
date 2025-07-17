@@ -33,7 +33,7 @@ instalar_wget() {
     wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh && bash InstallTools.sh
 }
 
-# Función para instalar MicroPython
+# Función para instalar Python3
 instalar_python3() {
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando Python3..."
     if ! pkg install python3 -y; then
@@ -67,7 +67,7 @@ fi
 cd "$CARPETA_VPN/"
 
 # Verificar e instalar Python3 si es necesario
-if ! command -v micropython &> /dev/null; then
+if ! command -v python3 &> /dev/null; then
     instalar_python3
 fi
 
@@ -78,5 +78,5 @@ if [ ! -d "../storage" ]; then
 fi
 
 # Iniciar VPN
-imprimir_mensaje "ÉXITO" "$VERDE" "VPN DevFast activado e interfaz web corriendo en http://localhost:7568/download !"
-python3 main.pyc
+imprimir_mensaje "ÉXITO" "$VERDE" "VPN DevFast activado!"
+python3 app.py

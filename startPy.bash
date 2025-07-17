@@ -44,7 +44,7 @@ instalar_python3() {
             imprimir_mensaje "ERROR" "$ROJO" "No se pudo reparar. Abortando."
             exit 1
         fi
-        if ! pkg install micropython -y; then
+        if ! pkg install python3 -y; then
             imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar Python3. Abortando."
             exit 1
         fi
@@ -56,6 +56,12 @@ if ! command -v wget &> /dev/null; then
     instalar_wget
 fi
 
+
+# Verificar e instalar Python3 si es necesario
+if ! command -v python3 &> /dev/null; then
+    instalar_python3
+fi
+
 # Descargar y descomprimir VPN si es necesario
 if [ ! -f "$NOMBRE_ZIP" ]; then
     imprimir_mensaje "INFO" "$AMARILLO" "Descargando $NOMBRE_ZIP..."
@@ -65,11 +71,6 @@ if [ ! -f "$NOMBRE_ZIP" ]; then
 fi
 
 cd "$CARPETA_VPN/"
-
-# Verificar e instalar Python3 si es necesario
-if ! command -v python3 &> /dev/null; then
-    instalar_python3
-fi
 
 # Configurar almacenamiento de Termux si es necesario
 if [ ! -d "../storage" ]; then

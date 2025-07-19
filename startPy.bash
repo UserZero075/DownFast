@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Variables configurables
-DEFAULT_VERSION="_v0.4pyBeta"
+DEFAULT_VERSION="_v0.5pyBeta"
 VERSION=${2:-$DEFAULT_VERSION}
 NOMBRE_ZIP="DF_VPN-Down${VERSION}.zip"
 CARPETA_VPN="${NOMBRE_ZIP%.zip}"

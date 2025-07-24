@@ -80,4 +80,4 @@ fi
 
 # Iniciar VPN
 imprimir_mensaje "ÉXITO" "$VERDE" "VPN DevFast activado!"
-python3 app.py
+python3 main.py

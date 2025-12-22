@@ -20,38 +20,33 @@ export DEBIAN_FRONTEND=noninteractive
 ROJO='\033[0;31m'
 VERDE='\033[0;32m'
 AMARILLO='\033[0;33m'
-NC='\033[0m' # Sin Color
+NC='\033[0m'
 
-# Función para imprimir mensajes con formato
 imprimir_mensaje() {
     echo -e "${2}[${1}] ${3}${NC}"
 }
 
-# Función para instalar wget
 instalar_wget() {
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando wget..."
-    if ! (apt update -y && apt install -y wget && apt upgrade -y); then
+    if ! pkg install wget -y; then
         imprimir_mensaje "ERROR" "$ROJO" "Error al instalar wget. Intentando reparar..."
-        apt --fix-broken install -y
-        if ! (apt update -y && apt install -y wget && apt upgrade -y); then
+        termux-change-repo
+        pkg repair
+        pkg reinstall coreutils liblz4
+        if ! pkg install wget -y; then
             imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar wget. Abortando."
             exit 1
         fi
     fi
-    wget https://github.com/MasterDevX/Termux-ADB/raw/master/InstallTools.sh && bash InstallTools.sh
 }
 
-# Función para instalar openssl
 instalar_openssl() {
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando openssl..."
     if ! pkg install openssl -y; then
         imprimir_mensaje "ERROR" "$ROJO" "Error al instalar openssl. Intentando reparar..."
         termux-change-repo
         pkg repair
-        if ! pkg reinstall coreutils liblz4; then
-            imprimir_mensaje "ERROR" "$ROJO" "No se pudo reparar. Abortando."
-            exit 1
-        fi
+        pkg reinstall coreutils liblz4
         if ! pkg install openssl -y; then
             imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar openssl. Abortando."
             exit 1
@@ -59,35 +54,27 @@ instalar_openssl() {
     fi
 }
 
-# Función para instalar brotli
 instalar_brotli() {
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando brotli..."
     if ! pkg install brotli -y; then
         imprimir_mensaje "ERROR" "$ROJO" "Error al instalar brotli. Intentando reparar..."
         termux-change-repo
         pkg repair
-        if ! pkg reinstall coreutils liblz4; then
-            imprimir_mensaje "ERROR" "$ROJO" "No se pudo reparar. Abortando."
-            exit 1
-        fi
+        pkg reinstall coreutils liblz4
         if ! pkg install brotli -y; then
             imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar brotli. Abortando."
             exit 1
         fi
     fi
 }
- 
- # Función para instalar dos2unix
+
 instalar_dos2unix() {
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando dos2unix..."
     if ! pkg install dos2unix -y; then
         imprimir_mensaje "ERROR" "$ROJO" "Error al instalar dos2unix. Intentando reparar..."
         termux-change-repo
         pkg repair
-        if ! pkg reinstall coreutils liblz4; then
-            imprimir_mensaje "ERROR" "$ROJO" "No se pudo reparar. Abortando."
-            exit 1
-        fi
+        pkg reinstall coreutils liblz4
         if ! pkg install dos2unix -y; then
             imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar dos2unix. Abortando."
             exit 1
@@ -95,37 +82,48 @@ instalar_dos2unix() {
     fi
 }
 
-# Función para instalar slipstream-client
+# === VERIFICACIONES EN ORDEN ===
+
+# 1. wget primero (necesario para descargas)
+if ! command -v wget &> /dev/null; then
+    instalar_wget
+fi
+
+# 2. Descargar slipstream-client si no existe
 if [ ! -f "slipstream-client" ]; then
+    imprimir_mensaje "INFO" "$AMARILLO" "Descargando slipstream-client..."
     wget https://raw.githubusercontent.com/Mahboub-power-is-back/quic_over_dns/main/slipstream-client
     chmod +x slipstream-client
 fi
 
-# Verificar e instalar openssl si es necesario
+# 3. Resto de dependencias
 if ! command -v openssl &> /dev/null; then
     instalar_openssl
 fi
 
-# Verificar e instalar dos2unix si es necesario
 if ! command -v dos2unix &> /dev/null; then
     instalar_dos2unix
 fi
 
-# Verificar e instalar brotli si es necesario
 if ! command -v brotli &> /dev/null; then
     instalar_brotli
 fi
+
+# === FUNCIONES DEL MENÚ Y LÓGICA ===
+
 menu_select() {
     local prompt="$1"; shift
     local options=("$@")
     local selected=0
     local key
-    tput civis
+    
+    printf '\033[?25l'
+    
     while true; do
         echo "$prompt"
         for i in "${!options[@]}"; do
             if [ "$i" -eq "$selected" ]; then
-                printf "> %s\n" "${options[$i]}"
+                printf "${VERDE}> %s${NC}\n" "${options[$i]}"
             else
                 printf "  %s\n" "${options[$i]}"
             fi
@@ -144,9 +142,12 @@ menu_select() {
         printf "\033[%dA" $((${#options[@]}+1))
     done
     printf "\033[%dB" $((${#options[@]}))
-    tput cnorm
+    
+    printf '\033[?25h'
+    
     echo "${options[$selected]}"
 }
+
 calcular_espera() {
     local minuto=$(date +%M)
     local segundo=$(date +%S)
@@ -162,8 +163,11 @@ calcular_espera() {
     done
     echo $((3600 + 450 - ahora))
 }
+
 PID=""
+
 cleanup() {
+    printf '\033[?25h'
     echo ""
     echo "[$(date '+%H:%M:%S')] Deteniendo..."
     if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
@@ -173,7 +177,10 @@ cleanup() {
     echo "[$(date '+%H:%M:%S')] Terminado."
     exit 0
 }
+
 trap cleanup SIGINT SIGTERM
+
+clear
 echo "========================================="
 echo "   SLIPSTREAM AUTO-RESTART"
 echo "========================================="
@@ -182,23 +189,36 @@ echo "           XX:37:30, XX:47:30, XX:57:30"
 echo "Presiona Ctrl+C para detener todo"
 echo "========================================="
 echo ""
-REGION=$(menu_select "Que región desea?" "CU" "US")
+
+REGION=$(menu_select "¿Qué región desea?" "CU" "US")
 if [ "$REGION" = "CU" ]; then
     DOMAIN="$CU"
 else
     DOMAIN="$US"
 fi
-TIPO_RED=$(menu_select "Usarás datos móviles o WiFi?" "Datos móviles" "WiFi")
+
+TIPO_RED=$(menu_select "¿Usarás datos móviles o WiFi?" "Datos móviles" "WiFi")
 if [ "$TIPO_RED" = "Datos móviles" ]; then
     IP=$(menu_select "¿A qué IP desea resolver?" "$D1" "$D2" "$D3" "$D4")
 else
     IP=$(menu_select "¿A qué IP desea resolver?" "$W1" "$W2" "$W3" "$W4")
 fi
+
+echo ""
+echo "========================================="
+echo "Configuración:"
+echo "  Región: $REGION"
+echo "  Dominio: $DOMAIN"
+echo "  Resolver: $IP"
+echo "========================================="
+echo ""
+
 while true; do
     espera=$(calcular_espera)
     echo "[$(date '+%H:%M:%S')] Iniciando slipstream-client..."
-    echo "[$(date '+%H:%M:%S')] Proximo reinicio en ${espera}s (~$((espera/60))min)"
+    echo "[$(date '+%H:%M:%S')] Próximo reinicio en ${espera}s (~$((espera/60))min)"
     echo ""
+    
     ./slipstream-client \
         --tcp-listen-port=5201 \
         --resolver="${IP}:53" \
@@ -206,7 +226,9 @@ while true; do
         --keep-alive-interval=600 \
         --congestion-control=cubic &
     PID=$!
+    
     sleep "$espera"
+    
     echo ""
     echo "[$(date '+%H:%M:%S')] Reiniciando slipstream-client..."
     if kill -0 "$PID" 2>/dev/null; then

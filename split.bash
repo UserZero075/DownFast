@@ -299,7 +299,7 @@ while true; do
       --domain="${DOMAIN}" \
       --keep-alive-interval=120 \
       --congestion-control=cubic \
-      2>&1 | grep -Ei "starting|initial|listening|connect|connected|connection|handshake|establish|close|closed|error|fail|timeout|retry" &
+      2>&1 | grep -Ei "starting|Starting|initial|Initia|Listening|Connection|completed|confirmed|listening|connect|connected|connection|handshake|establish|close|closed|error|fail|timeout|retry" &
     PID=$!
 
 

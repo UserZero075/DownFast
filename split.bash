@@ -294,12 +294,11 @@ while true; do
     echo ""
     
     ./slipstream-client \
-      --tcp-listen-port=5201 \
-      --resolver="${IP}:53" \
-      --domain="${DOMAIN}" \
-      --keep-alive-interval=120 \
-      --congestion-control=cubic \
-      2>&1 | grep -Ei "starting|Starting|initial|Initia|Listening|Connection|completed|confirmed|listening|connect|connected|connection|handshake|establish|close|closed|error|fail|timeout|retry" &
+        --tcp-listen-port=5201 \
+        --resolver="${IP}:53" \
+        --domain="${DOMAIN}" \
+        --keep-alive-interval=120 \
+        --congestion-control=cubic &
     PID=$!
 
 

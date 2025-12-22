@@ -118,15 +118,7 @@ SLIP_URL="https://raw.githubusercontent.com/Mahboub-power-is-back/quic_over_dns/
 
 if [ ! -f "slipstream-client" ]; then
     imprimir_mensaje "INFO" "$AMARILLO" "Descargando slipstream-client..."
-
-    # Intentar wget si existe Y puede ejecutarse
-    if command -v wget >/dev/null 2>&1 && wget --version >/dev/null 2>&1; then
-        wget -O slipstream-client "$SLIP_URL"
-    else
-        imprimir_mensaje "WARN" "$AMARILLO" "wget no funciona; usando curl..."
-        curl -L -o slipstream-client "$SLIP_URL"
-    fi
-
+    curl -L -o slipstream-client "$SLIP_URL"
     chmod +x slipstream-client
 else
     imprimir_mensaje "OK" "$VERDE" "slipstream-client ya existe"

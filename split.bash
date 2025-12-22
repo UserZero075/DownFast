@@ -26,126 +26,85 @@ imprimir_mensaje() {
     echo -e "${2}[${1}] ${3}${NC}"
 }
 
+# Función para verificar si un paquete está instalado
+paquete_instalado() {
+    dpkg -s "$1" &> /dev/null
+}
+
 instalar_wget() {
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando wget..."
-    if ! pkg install wget -y; then
-        imprimir_mensaje "ERROR" "$ROJO" "Error al instalar wget. Intentando reparar..."
-        termux-change-repo
-        pkg repair
-        pkg reinstall coreutils liblz4
-        if ! pkg install wget -y; then
-            imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar wget. Abortando."
-            exit 1
-        fi
-    fi
+    pkg install wget -y
 }
 
 instalar_openssl() {
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando openssl..."
-    if ! pkg install openssl -y; then
-        imprimir_mensaje "ERROR" "$ROJO" "Error al instalar openssl. Intentando reparar..."
-        termux-change-repo
-        pkg repair
-        pkg reinstall coreutils liblz4
-        if ! pkg install openssl -y; then
-            imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar openssl. Abortando."
-            exit 1
-        fi
-    fi
+    pkg install openssl -y
 }
 
 instalar_brotli() {
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando brotli..."
-    if ! pkg install brotli -y; then
-        imprimir_mensaje "ERROR" "$ROJO" "Error al instalar brotli. Intentando reparar..."
-        termux-change-repo
-        pkg repair
-        pkg reinstall coreutils liblz4
-        if ! pkg install brotli -y; then
-            imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar brotli. Abortando."
-            exit 1
-        fi
-    fi
+    pkg install brotli -y
 }
 
 instalar_dos2unix() {
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando dos2unix..."
-    if ! pkg install dos2unix -y; then
-        imprimir_mensaje "ERROR" "$ROJO" "Error al instalar dos2unix. Intentando reparar..."
-        termux-change-repo
-        pkg repair
-        pkg reinstall coreutils liblz4
-        if ! pkg install dos2unix -y; then
-            imprimir_mensaje "ERROR" "$ROJO" "No se pudo instalar dos2unix. Abortando."
-            exit 1
-        fi
-    fi
+    pkg install dos2unix -y
 }
 
-# === VERIFICACIONES EN ORDEN ===
+# === VERIFICACIONES ===
 
-# 1. wget primero (necesario para descargas)
-if ! command -v wget &> /dev/null; then
+# wget
+if ! paquete_instalado wget; then
     instalar_wget
 fi
 
-# 2. Descargar slipstream-client si no existe
+# Descargar slipstream-client si no existe
 if [ ! -f "slipstream-client" ]; then
     imprimir_mensaje "INFO" "$AMARILLO" "Descargando slipstream-client..."
     wget https://raw.githubusercontent.com/Mahboub-power-is-back/quic_over_dns/main/slipstream-client
     chmod +x slipstream-client
 fi
 
-# 3. Resto de dependencias
-if ! command -v openssl &> /dev/null; then
+# openssl
+if ! paquete_instalado openssl; then
     instalar_openssl
 fi
 
-if ! command -v dos2unix &> /dev/null; then
+# dos2unix
+if ! paquete_instalado dos2unix; then
     instalar_dos2unix
 fi
 
-if ! command -v brotli &> /dev/null; then
+# brotli
+if ! paquete_instalado brotli; then
     instalar_brotli
 fi
 
-# === FUNCIONES DEL MENÚ Y LÓGICA ===
+# === MENÚ SIMPLE CON NÚMEROS ===
 
 menu_select() {
-    local prompt="$1"; shift
+    local prompt="$1"
+    shift
     local options=("$@")
-    local selected=0
-    local key
+    local choice
     
-    printf '\033[?25l'
+    echo ""
+    echo "$prompt"
+    echo ""
+    for i in "${!options[@]}"; do
+        echo "  $((i+1))) ${options[$i]}"
+    done
+    echo ""
     
     while true; do
-        echo "$prompt"
-        for i in "${!options[@]}"; do
-            if [ "$i" -eq "$selected" ]; then
-                printf "${VERDE}> %s${NC}\n" "${options[$i]}"
-            else
-                printf "  %s\n" "${options[$i]}"
-            fi
-        done
-        read -rsn1 key
-        if [[ "$key" == $'\x1b' ]]; then
-            read -rsn2 -t 0.1 key
-            if [[ "$key" == "[A" ]]; then
-                selected=$(( (selected - 1 + ${#options[@]}) % ${#options[@]} ))
-            elif [[ "$key" == "[B" ]]; then
-                selected=$(( (selected + 1) % ${#options[@]} ))
-            fi
-        elif [[ "$key" == "" || "$key" == $'\n' ]]; then
-            break
+        read -p "Elige [1-${#options[@]}]: " choice
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
+            echo "${options[$((choice-1))]}"
+            return
+        else
+            echo "Opción inválida. Intenta de nuevo."
         fi
-        printf "\033[%dA" $((${#options[@]}+1))
     done
-    printf "\033[%dB" $((${#options[@]}))
-    
-    printf '\033[?25h'
-    
-    echo "${options[$selected]}"
 }
 
 calcular_espera() {
@@ -167,7 +126,6 @@ calcular_espera() {
 PID=""
 
 cleanup() {
-    printf '\033[?25h'
     echo ""
     echo "[$(date '+%H:%M:%S')] Deteniendo..."
     if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
@@ -188,8 +146,8 @@ echo "Reinicios: XX:07:30, XX:17:30, XX:27:30,"
 echo "           XX:37:30, XX:47:30, XX:57:30"
 echo "Presiona Ctrl+C para detener todo"
 echo "========================================="
-echo ""
 
+# Menú de región
 REGION=$(menu_select "¿Qué región desea?" "CU" "US")
 if [ "$REGION" = "CU" ]; then
     DOMAIN="$CU"
@@ -197,6 +155,7 @@ else
     DOMAIN="$US"
 fi
 
+# Menú de tipo de red
 TIPO_RED=$(menu_select "¿Usarás datos móviles o WiFi?" "Datos móviles" "WiFi")
 if [ "$TIPO_RED" = "Datos móviles" ]; then
     IP=$(menu_select "¿A qué IP desea resolver?" "$D1" "$D2" "$D3" "$D4")

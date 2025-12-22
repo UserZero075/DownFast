@@ -31,6 +31,85 @@ paquete_instalado() {
     pkg list-installed 2>/dev/null | grep -q "^$1/"
 }
 
+# === PARSEO DE ARGUMENTOS ===
+
+MODO_AUTO=false
+DOMAIN=""
+IP=""
+REGION=""
+
+while [[ $# -gt 0 ]]; do
+    case ${1^^} in  # ${1^^} convierte a mayúsculas
+        -CU)
+            REGION="CU"
+            DOMAIN="$CU"
+            MODO_AUTO=true
+            shift
+            ;;
+        -US)
+            REGION="US"
+            DOMAIN="$US"
+            MODO_AUTO=true
+            shift
+            ;;
+        -D1)
+            IP="$D1"
+            shift
+            ;;
+        -D2)
+            IP="$D2"
+            shift
+            ;;
+        -D3)
+            IP="$D3"
+            shift
+            ;;
+        -D4)
+            IP="$D4"
+            shift
+            ;;
+        -W1)
+            IP="$W1"
+            shift
+            ;;
+        -W2)
+            IP="$W2"
+            shift
+            ;;
+        -W3)
+            IP="$W3"
+            shift
+            ;;
+        -W4)
+            IP="$W4"
+            shift
+            ;;
+        *)
+            echo -e "${ROJO}Flag desconocido: $1${NC}"
+            echo ""
+            echo "Uso: $0 [-CU|-US] [-D1|-D2|-D3|-D4|-W1|-W2|-W3|-W4]"
+            echo ""
+            echo "Ejemplos:"
+            echo "  $0 -CU -D1     # Región CU con DNS Datos 1"
+            echo "  $0 -US -W2     # Región US con DNS WiFi 2"
+            echo "  $0             # Modo interactivo (menú)"
+            exit 1
+            ;;
+    esac
+done
+
+# Validar que si se especificó región, también se especificó IP
+if [ "$MODO_AUTO" = true ] && [ -z "$IP" ]; then
+    echo -e "${ROJO}Error: Debes especificar tanto la región (-CU o -US) como el DNS (-D1, -D2, -W1, etc.)${NC}"
+    exit 1
+fi
+
+# Si se especificó IP pero no región
+if [ -n "$IP" ] && [ "$MODO_AUTO" = false ]; then
+    echo -e "${ROJO}Error: Debes especificar la región (-CU o -US) junto con el DNS${NC}"
+    exit 1
+fi
+
 # === VERIFICACIONES ===
 
 if ! paquete_instalado wget; then
@@ -164,24 +243,26 @@ trap cleanup SIGINT SIGTERM
 
 # === SELECCIÓN ===
 
-sleep 1
+if [ "$MODO_AUTO" = false ]; then
+    sleep 1
 
-menu_flechas "¿Qué región desea?" "CU" "US"
-REGION="$SELECCION_GLOBAL"
-if [ "$REGION" = "CU" ]; then
-    DOMAIN="$CU"
-else
-    DOMAIN="$US"
-fi
+    menu_flechas "¿Qué región desea?" "CU" "US"
+    REGION="$SELECCION_GLOBAL"
+    if [ "$REGION" = "CU" ]; then
+        DOMAIN="$CU"
+    else
+        DOMAIN="$US"
+    fi
 
-menu_flechas "¿Tipo de conexión?" "Datos móviles" "WiFi"
-TIPO_RED="$SELECCION_GLOBAL"
-if [ "$TIPO_RED" = "Datos móviles" ]; then
-    menu_flechas "¿IP del resolver?" "$D1" "$D2" "$D3" "$D4"
-else
-    menu_flechas "¿IP del resolver?" "$W1" "$W2" "$W3" "$W4"
+    menu_flechas "¿Tipo de conexión?" "Datos móviles" "WiFi"
+    TIPO_RED="$SELECCION_GLOBAL"
+    if [ "$TIPO_RED" = "Datos móviles" ]; then
+        menu_flechas "¿IP del resolver?" "$D1" "$D2" "$D3" "$D4"
+    else
+        menu_flechas "¿IP del resolver?" "$W1" "$W2" "$W3" "$W4"
+    fi
+    IP="$SELECCION_GLOBAL"
 fi
-IP="$SELECCION_GLOBAL"
 
 # === PANTALLA PRINCIPAL ===
 
@@ -198,6 +279,11 @@ echo "Configuración:"
 echo -e "  ${CYAN}Región:${NC}   $REGION"
 echo -e "  ${CYAN}Dominio:${NC}  $DOMAIN"
 echo -e "  ${CYAN}Resolver:${NC} $IP"
+if [ "$MODO_AUTO" = true ]; then
+    echo -e "  ${AMARILLO}Modo:${NC}     Automático (sin menú)"
+else
+    echo -e "  ${VERDE}Modo:${NC}     Interactivo"
+fi
 echo "========================================="
 echo ""
 

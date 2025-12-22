@@ -114,13 +114,6 @@ fi
 
 # === VERIFICACIONES ===
 
-if ! paquete_instalado wget; then
-    imprimir_mensaje "INFO" "$AMARILLO" "Instalando wget..."
-    pkg install wget -y
-else
-    imprimir_mensaje "OK" "$VERDE" "wget ya instalado"
-fi
-
 SLIP_URL="https://raw.githubusercontent.com/Mahboub-power-is-back/quic_over_dns/main/slipstream-client"
 
 if [ ! -f "slipstream-client" ]; then

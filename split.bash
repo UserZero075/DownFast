@@ -16,7 +16,7 @@ W4='181.225.233.120'
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Colores para mensajes
+# Colores
 ROJO='\033[0;31m'
 VERDE='\033[0;32m'
 AMARILLO='\033[0;33m'
@@ -71,7 +71,7 @@ else
     imprimir_mensaje "OK" "$VERDE" "brotli ya instalado"
 fi
 
-# === MENÚ CON FLECHAS ===
+# === MENÚ CON FLECHAS (CORREGIDO PARA TERMUX) ===
 
 menu_flechas() {
     local prompt="$1"
@@ -80,58 +80,64 @@ menu_flechas() {
     local seleccion=0
     local total=${#opciones[@]}
     local tecla
+    local lineas=$((total + 6))
     
-    # Ocultar cursor
-    printf '\033[?25l'
-    
-    while true; do
-        # Limpiar pantalla y mostrar menú
-        clear
-        echo ""
-        echo -e "${BLANCO}═══════════════════════════════════════${NC}"
-        echo -e "${CYAN}  $prompt${NC}"
-        echo -e "${BLANCO}═══════════════════════════════════════${NC}"
-        echo ""
+    # Función para dibujar el menú (a stderr)
+    dibujar_menu() {
+        # Mover cursor arriba N líneas y limpiar
+        if [ "$1" = "redibujar" ]; then
+            printf '\033[%dA' "$lineas" >&2
+        fi
         
-        # Mostrar opciones
+        echo "" >&2
+        echo -e "${BLANCO}═══════════════════════════════════════${NC}" >&2
+        echo -e "${CYAN}  $prompt${NC}" >&2
+        echo -e "${BLANCO}═══════════════════════════════════════${NC}" >&2
+        
         for i in "${!opciones[@]}"; do
+            # Limpiar línea
+            printf '\033[2K' >&2
             if [ $i -eq $seleccion ]; then
-                # Opción seleccionada (resaltada)
-                echo -e "   ${VERDE}▶ ${BLANCO}${opciones[$i]}${NC}"
+                echo -e "   ${VERDE}▶ ${BLANCO}${opciones[$i]}${NC}" >&2
             else
-                # Opción no seleccionada
-                echo -e "   ${GRIS}  ${opciones[$i]}${NC}"
+                echo -e "   ${GRIS}  ${opciones[$i]}${NC}" >&2
             fi
         done
         
-        echo ""
-        echo -e "${GRIS}  ↑↓ Navegar  │  Enter Seleccionar${NC}"
-        echo ""
+        echo "" >&2
+        echo -e "${GRIS}  ↑↓ Mover  │  Enter Elegir${NC}" >&2
+    }
+    
+    # Ocultar cursor
+    printf '\033[?25l' >&2
+    
+    # Dibujar menú inicial
+    dibujar_menu "inicial"
+    
+    while true; do
+        # Leer 1 tecla
+        IFS= read -rsn1 tecla </dev/tty
         
-        # Leer tecla (1 carácter, sin eco, raw)
-        IFS= read -rsn1 tecla
-        
-        # Detectar secuencia de escape (flechas)
         if [[ $tecla == $'\033' ]]; then
-            read -rsn2 -t 0.1 tecla
+            # Leer resto de secuencia de escape
+            read -rsn2 -t 0.1 tecla </dev/tty
             case "$tecla" in
-                '[A')  # Flecha ARRIBA
+                '[A')  # Arriba
                     ((seleccion--))
-                    if [ $seleccion -lt 0 ]; then
-                        seleccion=$((total - 1))
-                    fi
+                    [ $seleccion -lt 0 ] && seleccion=$((total - 1))
+                    dibujar_menu "redibujar"
                     ;;
-                '[B')  # Flecha ABAJO
+                '[B')  # Abajo
                     ((seleccion++))
-                    if [ $seleccion -ge $total ]; then
-                        seleccion=0
-                    fi
+                    [ $seleccion -ge $total ] && seleccion=0
+                    dibujar_menu "redibujar"
                     ;;
             esac
         elif [[ $tecla == '' ]]; then  # Enter
             # Restaurar cursor
-            printf '\033[?25h'
-            # Devolver valor seleccionado
+            printf '\033[?25h' >&2
+            echo "" >&2
+            # Devolver valor (a stdout para captura)
             echo "${opciones[$seleccion]}"
             return 0
         fi
@@ -157,7 +163,6 @@ calcular_espera() {
 PID=""
 
 cleanup() {
-    # Restaurar cursor por si acaso
     printf '\033[?25h'
     echo ""
     echo "[$(date '+%H:%M:%S')] Deteniendo..."
@@ -171,39 +176,39 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM EXIT
 
-# === SELECCIÓN INTERACTIVA ===
+# === SELECCIÓN ===
 
-REGION=$(menu_flechas "¿Qué región desea?" "CU (Cuba)" "US (Estados Unidos)")
-if [[ "$REGION" == *"CU"* ]]; then
+echo ""
+echo "========================================="
+echo "   SLIPSTREAM AUTO-RESTART"
+echo "========================================="
+
+REGION=$(menu_flechas "¿Qué región desea?" "CU" "US")
+if [ "$REGION" = "CU" ]; then
     DOMAIN="$CU"
-    REGION="CU"
 else
     DOMAIN="$US"
-    REGION="US"
 fi
 
-TIPO_RED=$(menu_flechas "¿Tipo de conexión?" "📱 Datos móviles" "📶 WiFi")
-if [[ "$TIPO_RED" == *"Datos"* ]]; then
-    IP=$(menu_flechas "¿A qué IP desea resolver?" "$D1" "$D2" "$D3" "$D4")
+TIPO_RED=$(menu_flechas "¿Tipo de conexión?" "Datos móviles" "WiFi")
+if [ "$TIPO_RED" = "Datos móviles" ]; then
+    IP=$(menu_flechas "¿IP del resolver?" "$D1" "$D2" "$D3" "$D4")
 else
-    IP=$(menu_flechas "¿A qué IP desea resolver?" "$W1" "$W2" "$W3" "$W4")
+    IP=$(menu_flechas "¿IP del resolver?" "$W1" "$W2" "$W3" "$W4")
 fi
 
 # === PANTALLA PRINCIPAL ===
 
-clear
-echo "========================================="
-echo "   SLIPSTREAM AUTO-RESTART"
-echo "========================================="
-echo "Reinicios: XX:07:30, XX:17:30, XX:27:30,"
-echo "           XX:37:30, XX:47:30, XX:57:30"
-echo "Presiona Ctrl+C para detener todo"
-echo "========================================="
 echo ""
-echo "Configuración seleccionada:"
+echo "========================================="
+echo "Configuración:"
 echo -e "  ${CYAN}Región:${NC}   $REGION"
 echo -e "  ${CYAN}Dominio:${NC}  $DOMAIN"
 echo -e "  ${CYAN}Resolver:${NC} $IP"
+echo "========================================="
+echo "Reinicios: XX:07:30, XX:17:30, XX:27:30,"
+echo "           XX:37:30, XX:47:30, XX:57:30"
+echo "Presiona Ctrl+C para detener"
 echo "========================================="
 echo ""
 

@@ -20,6 +20,9 @@ export DEBIAN_FRONTEND=noninteractive
 ROJO='\033[0;31m'
 VERDE='\033[0;32m'
 AMARILLO='\033[0;33m'
+CYAN='\033[0;36m'
+BLANCO='\033[1;37m'
+GRIS='\033[0;90m'
 NC='\033[0m'
 
 imprimir_mensaje() {
@@ -68,30 +71,69 @@ else
     imprimir_mensaje "OK" "$VERDE" "brotli ya instalado"
 fi
 
-# === MENÚ CORREGIDO ===
+# === MENÚ CON FLECHAS ===
 
-menu_select() {
+menu_flechas() {
     local prompt="$1"
     shift
-    local options=("$@")
-    local choice
+    local opciones=("$@")
+    local seleccion=0
+    local total=${#opciones[@]}
+    local tecla
     
-    # >&2 envía a pantalla, no a la variable
-    echo "" >&2
-    echo "$prompt" >&2
-    echo "" >&2
-    for i in "${!options[@]}"; do
-        echo "  $((i+1))) ${options[$i]}" >&2
-    done
-    echo "" >&2
+    # Ocultar cursor
+    printf '\033[?25l'
     
     while true; do
-        read -p "Elige [1-${#options[@]}]: " choice </dev/tty
-        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
-            echo "${options[$((choice-1))]}"
-            return
-        else
-            echo "Opción inválida. Intenta de nuevo." >&2
+        # Limpiar pantalla y mostrar menú
+        clear
+        echo ""
+        echo -e "${BLANCO}═══════════════════════════════════════${NC}"
+        echo -e "${CYAN}  $prompt${NC}"
+        echo -e "${BLANCO}═══════════════════════════════════════${NC}"
+        echo ""
+        
+        # Mostrar opciones
+        for i in "${!opciones[@]}"; do
+            if [ $i -eq $seleccion ]; then
+                # Opción seleccionada (resaltada)
+                echo -e "   ${VERDE}▶ ${BLANCO}${opciones[$i]}${NC}"
+            else
+                # Opción no seleccionada
+                echo -e "   ${GRIS}  ${opciones[$i]}${NC}"
+            fi
+        done
+        
+        echo ""
+        echo -e "${GRIS}  ↑↓ Navegar  │  Enter Seleccionar${NC}"
+        echo ""
+        
+        # Leer tecla (1 carácter, sin eco, raw)
+        IFS= read -rsn1 tecla
+        
+        # Detectar secuencia de escape (flechas)
+        if [[ $tecla == $'\033' ]]; then
+            read -rsn2 -t 0.1 tecla
+            case "$tecla" in
+                '[A')  # Flecha ARRIBA
+                    ((seleccion--))
+                    if [ $seleccion -lt 0 ]; then
+                        seleccion=$((total - 1))
+                    fi
+                    ;;
+                '[B')  # Flecha ABAJO
+                    ((seleccion++))
+                    if [ $seleccion -ge $total ]; then
+                        seleccion=0
+                    fi
+                    ;;
+            esac
+        elif [[ $tecla == '' ]]; then  # Enter
+            # Restaurar cursor
+            printf '\033[?25h'
+            # Devolver valor seleccionado
+            echo "${opciones[$seleccion]}"
+            return 0
         fi
     done
 }
@@ -115,6 +157,8 @@ calcular_espera() {
 PID=""
 
 cleanup() {
+    # Restaurar cursor por si acaso
+    printf '\033[?25h'
     echo ""
     echo "[$(date '+%H:%M:%S')] Deteniendo..."
     if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
@@ -125,7 +169,27 @@ cleanup() {
     exit 0
 }
 
-trap cleanup SIGINT SIGTERM
+trap cleanup SIGINT SIGTERM EXIT
+
+# === SELECCIÓN INTERACTIVA ===
+
+REGION=$(menu_flechas "¿Qué región desea?" "CU (Cuba)" "US (Estados Unidos)")
+if [[ "$REGION" == *"CU"* ]]; then
+    DOMAIN="$CU"
+    REGION="CU"
+else
+    DOMAIN="$US"
+    REGION="US"
+fi
+
+TIPO_RED=$(menu_flechas "¿Tipo de conexión?" "📱 Datos móviles" "📶 WiFi")
+if [[ "$TIPO_RED" == *"Datos"* ]]; then
+    IP=$(menu_flechas "¿A qué IP desea resolver?" "$D1" "$D2" "$D3" "$D4")
+else
+    IP=$(menu_flechas "¿A qué IP desea resolver?" "$W1" "$W2" "$W3" "$W4")
+fi
+
+# === PANTALLA PRINCIPAL ===
 
 clear
 echo "========================================="
@@ -135,27 +199,11 @@ echo "Reinicios: XX:07:30, XX:17:30, XX:27:30,"
 echo "           XX:37:30, XX:47:30, XX:57:30"
 echo "Presiona Ctrl+C para detener todo"
 echo "========================================="
-
-REGION=$(menu_select "¿Qué región desea?" "CU" "US")
-if [ "$REGION" = "CU" ]; then
-    DOMAIN="$CU"
-else
-    DOMAIN="$US"
-fi
-
-TIPO_RED=$(menu_select "¿Usarás datos móviles o WiFi?" "Datos móviles" "WiFi")
-if [ "$TIPO_RED" = "Datos móviles" ]; then
-    IP=$(menu_select "¿A qué IP desea resolver?" "$D1" "$D2" "$D3" "$D4")
-else
-    IP=$(menu_select "¿A qué IP desea resolver?" "$W1" "$W2" "$W3" "$W4")
-fi
-
 echo ""
-echo "========================================="
-echo "Configuración:"
-echo "  Región: $REGION"
-echo "  Dominio: $DOMAIN"
-echo "  Resolver: $IP"
+echo "Configuración seleccionada:"
+echo -e "  ${CYAN}Región:${NC}   $REGION"
+echo -e "  ${CYAN}Dominio:${NC}  $DOMAIN"
+echo -e "  ${CYAN}Resolver:${NC} $IP"
 echo "========================================="
 echo ""
 

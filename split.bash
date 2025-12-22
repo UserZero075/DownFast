@@ -16,6 +16,8 @@ W4='181.225.233.120'
 
 export DEBIAN_FRONTEND=noninteractive
 
+termux-wake-lock
+
 # Colores
 ROJO='\033[0;31m'
 VERDE='\033[0;32m'

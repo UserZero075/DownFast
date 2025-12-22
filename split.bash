@@ -297,8 +297,9 @@ while true; do
         --tcp-listen-port=5201 \
         --resolver="${IP}:53" \
         --domain="${DOMAIN}" \
-        --keep-alive-interval=600 \
-        --congestion-control=cubic &
+        --keep-alive-interval=120 \
+        --congestion-control=cubic \
+        >/dev/null &
     PID=$!
     
     sleep "$espera"

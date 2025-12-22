@@ -26,36 +26,18 @@ imprimir_mensaje() {
     echo -e "${2}[${1}] ${3}${NC}"
 }
 
-# Función para verificar si un paquete está instalado
+# Función correcta para Termux
 paquete_instalado() {
-    dpkg -s "$1" &> /dev/null
-}
-
-instalar_wget() {
-    imprimir_mensaje "INFO" "$AMARILLO" "Instalando wget..."
-    pkg install wget -y
-}
-
-instalar_openssl() {
-    imprimir_mensaje "INFO" "$AMARILLO" "Instalando openssl..."
-    pkg install openssl -y
-}
-
-instalar_brotli() {
-    imprimir_mensaje "INFO" "$AMARILLO" "Instalando brotli..."
-    pkg install brotli -y
-}
-
-instalar_dos2unix() {
-    imprimir_mensaje "INFO" "$AMARILLO" "Instalando dos2unix..."
-    pkg install dos2unix -y
+    pkg list-installed 2>/dev/null | grep -q "^$1/"
 }
 
 # === VERIFICACIONES ===
 
-# wget
 if ! paquete_instalado wget; then
-    instalar_wget
+    imprimir_mensaje "INFO" "$AMARILLO" "Instalando wget..."
+    pkg install wget -y
+else
+    imprimir_mensaje "OK" "$VERDE" "wget ya instalado"
 fi
 
 # Descargar slipstream-client si no existe
@@ -63,24 +45,32 @@ if [ ! -f "slipstream-client" ]; then
     imprimir_mensaje "INFO" "$AMARILLO" "Descargando slipstream-client..."
     wget https://raw.githubusercontent.com/Mahboub-power-is-back/quic_over_dns/main/slipstream-client
     chmod +x slipstream-client
+else
+    imprimir_mensaje "OK" "$VERDE" "slipstream-client ya existe"
 fi
 
-# openssl
 if ! paquete_instalado openssl; then
-    instalar_openssl
+    imprimir_mensaje "INFO" "$AMARILLO" "Instalando openssl..."
+    pkg install openssl -y
+else
+    imprimir_mensaje "OK" "$VERDE" "openssl ya instalado"
 fi
 
-# dos2unix
 if ! paquete_instalado dos2unix; then
-    instalar_dos2unix
+    imprimir_mensaje "INFO" "$AMARILLO" "Instalando dos2unix..."
+    pkg install dos2unix -y
+else
+    imprimir_mensaje "OK" "$VERDE" "dos2unix ya instalado"
 fi
 
-# brotli
 if ! paquete_instalado brotli; then
-    instalar_brotli
+    imprimir_mensaje "INFO" "$AMARILLO" "Instalando brotli..."
+    pkg install brotli -y
+else
+    imprimir_mensaje "OK" "$VERDE" "brotli ya instalado"
 fi
 
-# === MENÚ SIMPLE CON NÚMEROS ===
+# === MENÚ SIMPLE ===
 
 menu_select() {
     local prompt="$1"
@@ -147,7 +137,6 @@ echo "           XX:37:30, XX:47:30, XX:57:30"
 echo "Presiona Ctrl+C para detener todo"
 echo "========================================="
 
-# Menú de región
 REGION=$(menu_select "¿Qué región desea?" "CU" "US")
 if [ "$REGION" = "CU" ]; then
     DOMAIN="$CU"
@@ -155,7 +144,6 @@ else
     DOMAIN="$US"
 fi
 
-# Menú de tipo de red
 TIPO_RED=$(menu_select "¿Usarás datos móviles o WiFi?" "Datos móviles" "WiFi")
 if [ "$TIPO_RED" = "Datos móviles" ]; then
     IP=$(menu_select "¿A qué IP desea resolver?" "$D1" "$D2" "$D3" "$D4")

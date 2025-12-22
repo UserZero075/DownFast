@@ -26,7 +26,6 @@ imprimir_mensaje() {
     echo -e "${2}[${1}] ${3}${NC}"
 }
 
-# Función correcta para Termux
 paquete_instalado() {
     pkg list-installed 2>/dev/null | grep -q "^$1/"
 }
@@ -40,7 +39,6 @@ else
     imprimir_mensaje "OK" "$VERDE" "wget ya instalado"
 fi
 
-# Descargar slipstream-client si no existe
 if [ ! -f "slipstream-client" ]; then
     imprimir_mensaje "INFO" "$AMARILLO" "Descargando slipstream-client..."
     wget https://raw.githubusercontent.com/Mahboub-power-is-back/quic_over_dns/main/slipstream-client
@@ -70,7 +68,7 @@ else
     imprimir_mensaje "OK" "$VERDE" "brotli ya instalado"
 fi
 
-# === MENÚ SIMPLE ===
+# === MENÚ CORREGIDO ===
 
 menu_select() {
     local prompt="$1"
@@ -78,21 +76,22 @@ menu_select() {
     local options=("$@")
     local choice
     
-    echo ""
-    echo "$prompt"
-    echo ""
+    # >&2 envía a pantalla, no a la variable
+    echo "" >&2
+    echo "$prompt" >&2
+    echo "" >&2
     for i in "${!options[@]}"; do
-        echo "  $((i+1))) ${options[$i]}"
+        echo "  $((i+1))) ${options[$i]}" >&2
     done
-    echo ""
+    echo "" >&2
     
     while true; do
-        read -p "Elige [1-${#options[@]}]: " choice
+        read -p "Elige [1-${#options[@]}]: " choice </dev/tty
         if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
             echo "${options[$((choice-1))]}"
             return
         else
-            echo "Opción inválida. Intenta de nuevo."
+            echo "Opción inválida. Intenta de nuevo." >&2
         fi
     done
 }

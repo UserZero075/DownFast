@@ -121,13 +121,24 @@ else
     imprimir_mensaje "OK" "$VERDE" "wget ya instalado"
 fi
 
+SLIP_URL="https://raw.githubusercontent.com/Mahboub-power-is-back/quic_over_dns/main/slipstream-client"
+
 if [ ! -f "slipstream-client" ]; then
     imprimir_mensaje "INFO" "$AMARILLO" "Descargando slipstream-client..."
-    wget https://raw.githubusercontent.com/Mahboub-power-is-back/quic_over_dns/main/slipstream-client
+
+    # Intentar wget si existe Y puede ejecutarse
+    if command -v wget >/dev/null 2>&1 && wget --version >/dev/null 2>&1; then
+        wget -O slipstream-client "$SLIP_URL"
+    else
+        imprimir_mensaje "WARN" "$AMARILLO" "wget no funciona; usando curl..."
+        curl -L -o slipstream-client "$SLIP_URL"
+    fi
+
     chmod +x slipstream-client
 else
     imprimir_mensaje "OK" "$VERDE" "slipstream-client ya existe"
 fi
+
 
 if ! paquete_instalado openssl; then
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando openssl..."

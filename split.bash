@@ -44,42 +44,38 @@ verificar_rapido() {
     [ -z "$comando" ] && comando="$paquete"
     [ -z "$test_arg" ] && test_arg="--version"
     
-    # Si el comando funciona, no hacer nada
-    if command -v "$comando" &>/dev/null && $comando $test_arg &>/dev/null 2>&1; then
+    # Verificación simple: solo si existe el comando
+    if command -v "$comando" &>/dev/null; then
+        imprimir_mensaje "OK" "$VERDE" "$paquete ✓"
+        return 0
+    fi
+    
+    # Si llegamos aquí, necesitamos instalar
+    if [ "$NECESITA_UPDATE" = false ]; then
+        NECESITA_UPDATE=true
+        imprimir_mensaje "INFO" "$AMARILLO" "Actualizando repositorios..."
+        yes | pkg update 2>/dev/null
+    fi
+    
+    imprimir_mensaje "INFO" "$AMARILLO" "Instalando $paquete..."
+    yes | pkg install -y "$paquete" 2>/dev/null
+    hash -r 2>/dev/null
+    
+    if command -v "$comando" &>/dev/null; then
         imprimir_mensaje "OK" "$VERDE" "$paquete ✓"
         return 0
     else
-        # Marcar que necesitamos update (solo una vez)
-        if [ "$NECESITA_UPDATE" = false ]; then
-            NECESITA_UPDATE=true
-            imprimir_mensaje "INFO" "$AMARILLO" "Actualizando repositorios..."
-            yes | pkg update 2>/dev/null
-        fi
-        
-        # Instalar con pkg (mejor para Termux)
-        imprimir_mensaje "INFO" "$AMARILLO" "Instalando $paquete..."
-        yes | pkg install -y "$paquete" 2>/dev/null
-        
-        # Refrescar PATH
+        # Segundo intento: reinstalar
+        imprimir_mensaje "WARN" "$AMARILLO" "Reintentando $paquete..."
+        yes | pkg reinstall -y "$paquete" 2>/dev/null
         hash -r 2>/dev/null
         
-        # Verificar de forma simple: solo si existe el comando
         if command -v "$comando" &>/dev/null; then
             imprimir_mensaje "OK" "$VERDE" "$paquete ✓"
             return 0
         else
-            # Segundo intento: reinstalar
-            imprimir_mensaje "WARN" "$AMARILLO" "Reintentando $paquete..."
-            yes | pkg reinstall -y "$paquete" 2>/dev/null
-            hash -r 2>/dev/null
-            
-            if command -v "$comando" &>/dev/null; then
-                imprimir_mensaje "OK" "$VERDE" "$paquete ✓"
-                return 0
-            else
-                imprimir_mensaje "ERROR" "$ROJO" "$paquete falló"
-                return 1
-            fi
+            imprimir_mensaje "ERROR" "$ROJO" "$paquete falló"
+            return 1
         fi
     fi
 }
@@ -167,11 +163,11 @@ fi
 echo ""
 imprimir_mensaje "INFO" "$CYAN" "Verificando dependencias..."
 
-# OpenSSL: verificar solo existencia, no ejecutar "version"
-verificar_rapido "openssl" "openssl" "help"
-verificar_rapido "dos2unix" "dos2unix" "--version"
-verificar_rapido "brotli" "brotli" "--version"
-verificar_rapido "curl" "curl" "--version"
+# Solo verificamos si el comando existe (sin ejecutar argumentos problemáticos)
+verificar_rapido "openssl" "openssl"
+verificar_rapido "dos2unix" "dos2unix"
+verificar_rapido "brotli" "brotli"
+verificar_rapido "curl" "curl"
 
 echo ""
 

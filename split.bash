@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 # Variables globales
 CU='dns.devfastfree.linkpc.net'
 US='dns.devfastfreeus.linkpc.net'
@@ -204,15 +203,21 @@ calcular_espera() {
     local segundo=$(date +%S)
     minuto=$((10#$minuto))
     segundo=$((10#$segundo))
+
     local ahora=$((minuto * 60 + segundo))
-    local objetivos=(450 1050 1650 2250 2850 3450)
+
+    # Reinicios: cada 5 minutos en el segundo 22
+    local objetivos=(22 322 622 922 1222 1522 1822 2122 2422 2722 3022 3322)
+
     for objetivo in "${objetivos[@]}"; do
         if [ "$ahora" -lt "$objetivo" ]; then
             echo $((objetivo - ahora))
             return
         fi
     done
-    echo $((3600 + 450 - ahora))
+
+    # Próximo objetivo: 00:22 de la hora siguiente
+    echo $((3600 + 22 - ahora))
 }
 
 PID=""
@@ -259,10 +264,6 @@ fi
 clear
 echo "========================================="
 echo "   SLIPSTREAM AUTO-RESTART v0.5"
-echo "========================================="
-echo "Reinicios: XX:07:30, XX:17:30, XX:27:30,"
-echo "           XX:37:30, XX:47:30, XX:57:30"
-echo "Presiona Ctrl+C para detener"
 echo "========================================="
 echo ""
 echo "Configuración:"

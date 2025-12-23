@@ -16,7 +16,6 @@ W4='181.225.233.120'
 
 # === FORZAR INSTALACIÓN NO INTERACTIVA ===
 export DEBIAN_FRONTEND=noninteractive
-export APT_LISTCHANGES_FRONTEND=none
 
 termux-wake-lock 2>/dev/null
 
@@ -29,58 +28,6 @@ NC='\033[0m'
 
 imprimir_mensaje() {
     echo -e "${2}[${1}] ${3}${NC}"
-}
-
-# ============================================
-# VERIFICACIÓN RÁPIDA PARA TERMUX
-# ============================================
-
-NECESITA_UPDATE=false
-
-verificar_rapido() {
-    local paquete="$1"
-    local comando="$2"
-    
-    [ -z "$comando" ] && comando="$paquete"
-    
-    # Ruta binarios de Termux
-    local TERMUX_BIN="/data/data/com.termux/files/usr/bin"
-    
-    # Verificar si existe el comando (múltiples métodos)
-    if command -v "$comando" &>/dev/null || [ -x "$TERMUX_BIN/$comando" ]; then
-        imprimir_mensaje "OK" "$VERDE" "$paquete ✓"
-        return 0
-    fi
-    
-    # Verificar si el paquete está instalado con dpkg
-    if dpkg -s "$paquete" &>/dev/null; then
-        imprimir_mensaje "OK" "$VERDE" "$paquete ✓ (instalado)"
-        return 0
-    fi
-    
-    # Si llegamos aquí, necesitamos instalar
-    if [ "$NECESITA_UPDATE" = false ]; then
-        NECESITA_UPDATE=true
-        imprimir_mensaje "INFO" "$AMARILLO" "Actualizando repositorios..."
-        pkg update -y -o Dpkg::Options::="--force-confnew" 2>/dev/null
-    fi
-    
-    imprimir_mensaje "INFO" "$AMARILLO" "Instalando $paquete..."
-    
-    # Instalación forzando configuración nueva (evita preguntas)
-    pkg install -y -o Dpkg::Options::="--force-confnew" "$paquete" 2>/dev/null
-    
-    # Refrescar PATH
-    hash -r 2>/dev/null
-    
-    # Verificar nuevamente (múltiples métodos)
-    if command -v "$comando" &>/dev/null || [ -x "$TERMUX_BIN/$comando" ] || dpkg -s "$paquete" &>/dev/null; then
-        imprimir_mensaje "OK" "$VERDE" "$paquete ✓"
-        return 0
-    else
-        imprimir_mensaje "ERROR" "$ROJO" "$paquete falló"
-        return 1
-    fi
 }
 
 # === PARSEO DE ARGUMENTOS ===
@@ -161,15 +108,22 @@ if [ -n "$IP" ] && [ "$MODO_AUTO" = false ]; then
     exit 1
 fi
 
-# === VERIFICACIONES RÁPIDAS ===
+# === VERIFICAR BROTLI ===
 
 echo ""
 imprimir_mensaje "INFO" "$CYAN" "Verificando dependencias..."
 
-verificar_rapido "openssl" "openssl"
-verificar_rapido "dos2unix" "dos2unix"
-verificar_rapido "brotli" "brotli"
-verificar_rapido "curl" "curl"
+if [ -x "/data/data/com.termux/files/usr/bin/brotli" ]; then
+    imprimir_mensaje "OK" "$VERDE" "brotli ✓"
+else
+    imprimir_mensaje "INFO" "$AMARILLO" "Instalando brotli..."
+    yes | pkg install -y brotli 2>/dev/null
+    if [ -x "/data/data/com.termux/files/usr/bin/brotli" ]; then
+        imprimir_mensaje "OK" "$VERDE" "brotli ✓"
+    else
+        imprimir_mensaje "ERROR" "$ROJO" "brotli falló"
+    fi
+fi
 
 echo ""
 

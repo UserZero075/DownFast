@@ -258,7 +258,7 @@ fi
 
 clear
 echo "========================================="
-echo "   SLIPSTREAM AUTO-RESTART v0.4"
+echo "   SLIPSTREAM AUTO-RESTART v0.5"
 echo "========================================="
 echo "Reinicios: XX:07:30, XX:17:30, XX:27:30,"
 echo "           XX:37:30, XX:47:30, XX:57:30"

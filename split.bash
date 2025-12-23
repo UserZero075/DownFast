@@ -14,7 +14,9 @@ W2='181.225.233.40'
 W3='181.225.233.110'
 W4='181.225.233.120'
 
+# === FORZAR INSTALACIÓN NO INTERACTIVA ===
 export DEBIAN_FRONTEND=noninteractive
+export APT_LISTCHANGES_FRONTEND=none
 
 termux-wake-lock 2>/dev/null
 
@@ -30,8 +32,7 @@ imprimir_mensaje() {
 }
 
 # ============================================
-# VERIFICACIÓN RÁPIDA: Solo instala si NO funciona
-# Sin pkg update innecesario
+# VERIFICACIÓN RÁPIDA: Sin preguntas interactivas
 # ============================================
 
 NECESITA_UPDATE=false
@@ -53,12 +54,15 @@ verificar_rapido() {
         if [ "$NECESITA_UPDATE" = false ]; then
             NECESITA_UPDATE=true
             imprimir_mensaje "INFO" "$AMARILLO" "Actualizando repositorios..."
-            pkg update -y -q 2>/dev/null
+            yes | pkg update -y 2>/dev/null
         fi
         
-        # Instalar silenciosamente
+        # Instalar SIN PREGUNTAS - acepta todo automáticamente
         imprimir_mensaje "INFO" "$AMARILLO" "Instalando $paquete..."
-        pkg install "$paquete" -y -q 2>/dev/null
+        yes | apt-get install -y \
+            -o Dpkg::Options::="--force-confnew" \
+            -o Dpkg::Options::="--force-confdef" \
+            "$paquete" 2>/dev/null
         
         # Verificar
         if command -v "$comando" &>/dev/null; then
@@ -154,7 +158,6 @@ fi
 echo ""
 imprimir_mensaje "INFO" "$CYAN" "Verificando dependencias..."
 
-# Solo hace pkg update SI algún paquete falta
 verificar_rapido "openssl" "openssl" "version"
 verificar_rapido "dos2unix" "dos2unix" "--version"
 verificar_rapido "brotli" "brotli" "--version"

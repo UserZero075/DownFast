@@ -16,6 +16,7 @@ W4='181.225.233.120'
 
 # === FORZAR INSTALACIÓN NO INTERACTIVA ===
 export DEBIAN_FRONTEND=noninteractive
+export APT_LISTCHANGES_FRONTEND=none
 
 termux-wake-lock 2>/dev/null
 
@@ -39,14 +40,21 @@ NECESITA_UPDATE=false
 verificar_rapido() {
     local paquete="$1"
     local comando="$2"
-    local test_arg="$3"
     
     [ -z "$comando" ] && comando="$paquete"
-    [ -z "$test_arg" ] && test_arg="--version"
     
-    # Verificación simple: solo si existe el comando
-    if command -v "$comando" &>/dev/null; then
+    # Ruta binarios de Termux
+    local TERMUX_BIN="/data/data/com.termux/files/usr/bin"
+    
+    # Verificar si existe el comando (múltiples métodos)
+    if command -v "$comando" &>/dev/null || [ -x "$TERMUX_BIN/$comando" ]; then
         imprimir_mensaje "OK" "$VERDE" "$paquete ✓"
+        return 0
+    fi
+    
+    # Verificar si el paquete está instalado con dpkg
+    if dpkg -s "$paquete" &>/dev/null; then
+        imprimir_mensaje "OK" "$VERDE" "$paquete ✓ (instalado)"
         return 0
     fi
     
@@ -54,29 +62,24 @@ verificar_rapido() {
     if [ "$NECESITA_UPDATE" = false ]; then
         NECESITA_UPDATE=true
         imprimir_mensaje "INFO" "$AMARILLO" "Actualizando repositorios..."
-        yes | pkg update 2>/dev/null
+        pkg update -y -o Dpkg::Options::="--force-confnew" 2>/dev/null
     fi
     
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando $paquete..."
-    yes | pkg install -y "$paquete" 2>/dev/null
+    
+    # Instalación forzando configuración nueva (evita preguntas)
+    pkg install -y -o Dpkg::Options::="--force-confnew" "$paquete" 2>/dev/null
+    
+    # Refrescar PATH
     hash -r 2>/dev/null
     
-    if command -v "$comando" &>/dev/null; then
+    # Verificar nuevamente (múltiples métodos)
+    if command -v "$comando" &>/dev/null || [ -x "$TERMUX_BIN/$comando" ] || dpkg -s "$paquete" &>/dev/null; then
         imprimir_mensaje "OK" "$VERDE" "$paquete ✓"
         return 0
     else
-        # Segundo intento: reinstalar
-        imprimir_mensaje "WARN" "$AMARILLO" "Reintentando $paquete..."
-        yes | pkg reinstall -y "$paquete" 2>/dev/null
-        hash -r 2>/dev/null
-        
-        if command -v "$comando" &>/dev/null; then
-            imprimir_mensaje "OK" "$VERDE" "$paquete ✓"
-            return 0
-        else
-            imprimir_mensaje "ERROR" "$ROJO" "$paquete falló"
-            return 1
-        fi
+        imprimir_mensaje "ERROR" "$ROJO" "$paquete falló"
+        return 1
     fi
 }
 
@@ -163,7 +166,6 @@ fi
 echo ""
 imprimir_mensaje "INFO" "$CYAN" "Verificando dependencias..."
 
-# Solo verificamos si el comando existe (sin ejecutar argumentos problemáticos)
 verificar_rapido "openssl" "openssl"
 verificar_rapido "dos2unix" "dos2unix"
 verificar_rapido "brotli" "brotli"

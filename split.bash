@@ -16,7 +16,6 @@ W4='181.225.233.120'
 
 # === FORZAR INSTALACIÓN NO INTERACTIVA ===
 export DEBIAN_FRONTEND=noninteractive
-export APT_LISTCHANGES_FRONTEND=none
 
 termux-wake-lock 2>/dev/null
 
@@ -32,7 +31,7 @@ imprimir_mensaje() {
 }
 
 # ============================================
-# VERIFICACIÓN RÁPIDA: Sin preguntas interactivas
+# VERIFICACIÓN RÁPIDA PARA TERMUX
 # ============================================
 
 NECESITA_UPDATE=false
@@ -54,23 +53,33 @@ verificar_rapido() {
         if [ "$NECESITA_UPDATE" = false ]; then
             NECESITA_UPDATE=true
             imprimir_mensaje "INFO" "$AMARILLO" "Actualizando repositorios..."
-            yes | pkg update -y 2>/dev/null
+            yes | pkg update 2>/dev/null
         fi
         
-        # Instalar SIN PREGUNTAS - acepta todo automáticamente
+        # Instalar con pkg (mejor para Termux)
         imprimir_mensaje "INFO" "$AMARILLO" "Instalando $paquete..."
-        yes | apt-get install -y \
-            -o Dpkg::Options::="--force-confnew" \
-            -o Dpkg::Options::="--force-confdef" \
-            "$paquete" 2>/dev/null
+        yes | pkg install -y "$paquete" 2>/dev/null
         
-        # Verificar
+        # Refrescar PATH
+        hash -r 2>/dev/null
+        
+        # Verificar de forma simple: solo si existe el comando
         if command -v "$comando" &>/dev/null; then
             imprimir_mensaje "OK" "$VERDE" "$paquete ✓"
             return 0
         else
-            imprimir_mensaje "ERROR" "$ROJO" "$paquete falló"
-            return 1
+            # Segundo intento: reinstalar
+            imprimir_mensaje "WARN" "$AMARILLO" "Reintentando $paquete..."
+            yes | pkg reinstall -y "$paquete" 2>/dev/null
+            hash -r 2>/dev/null
+            
+            if command -v "$comando" &>/dev/null; then
+                imprimir_mensaje "OK" "$VERDE" "$paquete ✓"
+                return 0
+            else
+                imprimir_mensaje "ERROR" "$ROJO" "$paquete falló"
+                return 1
+            fi
         fi
     fi
 }
@@ -158,7 +167,8 @@ fi
 echo ""
 imprimir_mensaje "INFO" "$CYAN" "Verificando dependencias..."
 
-verificar_rapido "openssl" "openssl" "version"
+# OpenSSL: verificar solo existencia, no ejecutar "version"
+verificar_rapido "openssl" "openssl" "help"
 verificar_rapido "dos2unix" "dos2unix" "--version"
 verificar_rapido "brotli" "brotli" "--version"
 verificar_rapido "curl" "curl" "--version"

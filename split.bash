@@ -30,40 +30,42 @@ imprimir_mensaje() {
 }
 
 # ============================================
-# FUNCIÓN MEJORADA: Verifica si el BINARIO funciona
-# No solo si el paquete está "instalado"
+# VERIFICACIÓN RÁPIDA: Solo instala si NO funciona
+# Sin pkg update innecesario
 # ============================================
 
-verificar_e_instalar() {
+NECESITA_UPDATE=false
+
+verificar_rapido() {
     local paquete="$1"
-    local comando="$2"  # comando para probar (puede ser diferente al nombre del paquete)
-    local test_arg="$3" # argumento para probar el comando
+    local comando="$2"
+    local test_arg="$3"
     
-    # Si no se especifica comando, usar el nombre del paquete
     [ -z "$comando" ] && comando="$paquete"
-    # Si no se especifica argumento de prueba, usar --version
     [ -z "$test_arg" ] && test_arg="--version"
     
-    # Verificar si el comando existe Y funciona
-    if command -v "$comando" &>/dev/null && $comando $test_arg &>/dev/null; then
-        imprimir_mensaje "OK" "$VERDE" "$paquete funciona correctamente"
+    # Si el comando funciona, no hacer nada
+    if command -v "$comando" &>/dev/null && $comando $test_arg &>/dev/null 2>&1; then
+        imprimir_mensaje "OK" "$VERDE" "$paquete ✓"
         return 0
     else
-        # El comando no existe o no funciona - instalar/reinstalar
-        if pkg list-installed 2>/dev/null | grep -q "^$paquete/"; then
-            imprimir_mensaje "WARN" "$AMARILLO" "$paquete aparece instalado pero NO funciona. Reinstalando..."
-            pkg reinstall "$paquete" -y
-        else
-            imprimir_mensaje "INFO" "$AMARILLO" "Instalando $paquete..."
-            pkg install "$paquete" -y
+        # Marcar que necesitamos update (solo una vez)
+        if [ "$NECESITA_UPDATE" = false ]; then
+            NECESITA_UPDATE=true
+            imprimir_mensaje "INFO" "$AMARILLO" "Actualizando repositorios..."
+            pkg update -y -q 2>/dev/null
         fi
         
-        # Verificar de nuevo después de instalar
-        if command -v "$comando" &>/dev/null && $comando $test_arg &>/dev/null; then
-            imprimir_mensaje "OK" "$VERDE" "$paquete instalado correctamente"
+        # Instalar silenciosamente
+        imprimir_mensaje "INFO" "$AMARILLO" "Instalando $paquete..."
+        pkg install "$paquete" -y -q 2>/dev/null
+        
+        # Verificar
+        if command -v "$comando" &>/dev/null; then
+            imprimir_mensaje "OK" "$VERDE" "$paquete ✓"
             return 0
         else
-            imprimir_mensaje "ERROR" "$ROJO" "Fallo al instalar $paquete"
+            imprimir_mensaje "ERROR" "$ROJO" "$paquete falló"
             return 1
         fi
     fi
@@ -147,20 +149,16 @@ if [ -n "$IP" ] && [ "$MODO_AUTO" = false ]; then
     exit 1
 fi
 
-# === VERIFICACIONES DE PAQUETES (MEJORADA) ===
+# === VERIFICACIONES RÁPIDAS ===
 
 echo ""
 imprimir_mensaje "INFO" "$CYAN" "Verificando dependencias..."
-echo ""
 
-# Actualizar lista de paquetes primero
-pkg update -y 2>/dev/null
-
-# Verificar cada paquete con su comando y argumento de prueba
-verificar_e_instalar "openssl" "openssl" "version"
-verificar_e_instalar "dos2unix" "dos2unix" "--version"
-verificar_e_instalar "brotli" "brotli" "--version"
-verificar_e_instalar "curl" "curl" "--version"
+# Solo hace pkg update SI algún paquete falta
+verificar_rapido "openssl" "openssl" "version"
+verificar_rapido "dos2unix" "dos2unix" "--version"
+verificar_rapido "brotli" "brotli" "--version"
+verificar_rapido "curl" "curl" "--version"
 
 echo ""
 
@@ -170,13 +168,12 @@ SLIP_URL="https://raw.githubusercontent.com/Mahboub-power-is-back/quic_over_dns/
 
 if [ ! -f "slipstream-client" ]; then
     imprimir_mensaje "INFO" "$AMARILLO" "Descargando slipstream-client..."
-    curl -L -o slipstream-client "$SLIP_URL"
+    curl -sL -o slipstream-client "$SLIP_URL"
     chmod +x slipstream-client
 else
-    imprimir_mensaje "OK" "$VERDE" "slipstream-client ya existe"
+    imprimir_mensaje "OK" "$VERDE" "slipstream-client ✓"
 fi
 
-# Asegurar permisos
 chmod +x slipstream-client 2>/dev/null
 
 # === MENÚ CON FLECHAS ===
@@ -271,7 +268,7 @@ trap cleanup SIGINT SIGTERM
 # === SELECCIÓN ===
 
 if [ "$MODO_AUTO" = false ]; then
-    sleep 1
+    sleep 0.5
 
     menu_flechas "¿Qué región desea?" "CU" "US"
     REGION="$SELECCION_GLOBAL"

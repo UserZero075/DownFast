@@ -159,7 +159,7 @@ trap cleanup SIGINT SIGTERM
 
 clear
 echo "========================================="
-echo " SLIPSTREAM AUTO-RECONNECT + RESTART"
+echo " SLIPSTREAM AUTO-RECONNECT + RESTART v0.3"
 echo "========================================="
 echo "Región: $REGION"
 echo "Dominio: $DOMAIN"

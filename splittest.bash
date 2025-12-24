@@ -77,12 +77,6 @@ else
     yes | pkg install -y brotli 2>/dev/null
 fi
 
-if command -v curl >/dev/null 2>&1; then
-    imprimir_mensaje "OK" "$VERDE" "curl ✓"
-else
-    yes | pkg install -y curl 2>/dev/null
-fi
-
 echo ""
 
 # === DESCARGAR SLIPSTREAM ===
@@ -154,127 +148,92 @@ calcular_espera() {
 }
 
 # ══════════════════════════════════════════════════════════════════
-#  SISTEMA DE VERIFICACIÓN DE CONEXIÓN A INTERNET
+#  VERIFICACIÓN DE CONEXIÓN E INTERNET
 # ══════════════════════════════════════════════════════════════════
 
-# Configuración - MUY tolerante para evitar falsos positivos
-CHECK_INTERVAL=10           # Verificar cada 10 segundos
-FAIL_THRESHOLD=4            # 4 fallos consecutivos = 40 segundos de problema real
-CONNECT_TIMEOUT=15          # Timeout de conexión (generoso)
-MAX_TIMEOUT=25              # Timeout total (muy generoso para redes saturadas)
+CHECK_INTERVAL=10          # Verificar cada 10 segundos
+INET_CHECK_EVERY=3         # Verificar internet cada 3 checks (30 segundos)
+FAIL_THRESHOLD=4           # 4 fallos = 40 segundos de problema
+INET_TIMEOUT=20            # Timeout generoso para evitar falsos positivos
+
 CONSECUTIVE_FAILS=0
+CHECK_COUNT=0
 
-# URLs de prueba (muy ligeras, solo devuelven código de estado)
-# Estas son las URLs que usan Android/iOS para detectar portales cautivos
-TEST_URLS=(
-    "http://connectivitycheck.gstatic.com/generate_204"    # Google - devuelve 204
-    "http://www.msftconnecttest.com/connecttest.txt"       # Microsoft - devuelve 200
-    "http://captive.apple.com/hotspot-detect.html"         # Apple - devuelve 200
-)
-
-# ─────────────────────────────────────────────────────────────────
-# Detectar tipo de proxy que usa slipstream
-# ─────────────────────────────────────────────────────────────────
-PROXY_TYPE=""
-
-detectar_tipo_proxy() {
-    echo -e "${GRIS}[$(date '+%H:%M:%S')] Detectando tipo de proxy...${NC}"
-    
-    # Probar SOCKS5
-    if curl --proxy socks5h://127.0.0.1:5201 \
-            -s -o /dev/null \
-            --connect-timeout 5 \
-            --max-time 10 \
-            "http://connectivitycheck.gstatic.com/generate_204" 2>/dev/null; then
-        PROXY_TYPE="socks5h://127.0.0.1:5201"
-        echo -e "${VERDE}[$(date '+%H:%M:%S')] Proxy: SOCKS5 ✓${NC}"
-        return 0
-    fi
-    
-    # Probar HTTP proxy
-    if curl --proxy http://127.0.0.1:5201 \
-            -s -o /dev/null \
-            --connect-timeout 5 \
-            --max-time 10 \
-            "http://connectivitycheck.gstatic.com/generate_204" 2>/dev/null; then
-        PROXY_TYPE="http://127.0.0.1:5201"
-        echo -e "${VERDE}[$(date '+%H:%M:%S')] Proxy: HTTP ✓${NC}"
-        return 0
-    fi
-    
-    # No se detectó proxy, usar verificación básica
-    PROXY_TYPE=""
-    echo -e "${AMARILLO}[$(date '+%H:%M:%S')] Proxy no detectado, usando verificación básica${NC}"
-    return 1
-}
-
-# ─────────────────────────────────────────────────────────────────
-# Verificación principal de conexión
-# ─────────────────────────────────────────────────────────────────
-
-# Retorna:
-#   0 = Internet OK
-#   1 = Sin internet (fallo suave)
-#   2 = Proceso muerto
-#   3 = Puerto local no responde
-
+# Retorna: 0=OK, 1=Sin internet, 2=Puerto no responde, 3=Proceso muerto
 verificar_conexion() {
     # ═══════════════════════════════════════════════════════════
-    # NIVEL 1: ¿Proceso vivo? (instantáneo)
+    # NIVEL 1: ¿Proceso vivo?
     # ═══════════════════════════════════════════════════════════
     if ! kill -0 "$PID" 2>/dev/null; then
-        return 2
-    fi
-    
-    # ═══════════════════════════════════════════════════════════
-    # NIVEL 2: ¿Puerto local responde? (rápido)
-    # ═══════════════════════════════════════════════════════════
-    if ! timeout 3 bash -c "echo >/dev/tcp/127.0.0.1/5201" 2>/dev/null; then
         return 3
     fi
     
     # ═══════════════════════════════════════════════════════════
-    # NIVEL 3: ¿Hay internet real a través del túnel?
+    # NIVEL 2: ¿Puerto acepta conexiones?
     # ═══════════════════════════════════════════════════════════
+    if ! timeout 3 bash -c "echo >/dev/tcp/127.0.0.1/5201" 2>/dev/null; then
+        return 2
+    fi
     
-    # Si no tenemos proxy detectado, solo verificar proceso + puerto
-    if [ -z "$PROXY_TYPE" ]; then
+    # ═══════════════════════════════════════════════════════════
+    # NIVEL 3: ¿Hay internet? (cada INET_CHECK_EVERY verificaciones)
+    # ═══════════════════════════════════════════════════════════
+    ((CHECK_COUNT++))
+    
+    if [ $((CHECK_COUNT % INET_CHECK_EVERY)) -eq 0 ]; then
+        if ! verificar_internet; then
+            return 1
+        fi
+    fi
+    
+    return 0
+}
+
+verificar_internet() {
+    # Método 1: Enviar petición HTTP al túnel y esperar respuesta
+    # El túnel actúa como proxy HTTP forward
+    local http_code
+    
+    http_code=$(timeout "$INET_TIMEOUT" curl \
+        -x "http://127.0.0.1:5201" \
+        -s -o /dev/null \
+        -w "%{http_code}" \
+        --connect-timeout 15 \
+        "http://connectivitycheck.gstatic.com/generate_204" 2>/dev/null)
+    
+    # 204 = Google OK, 200 = también OK
+    if [ "$http_code" = "204" ] || [ "$http_code" = "200" ]; then
         return 0
     fi
     
-    # Intentar conectar a través del proxy
-    local http_code
-    local url
+    # Método 2: Probar con otro endpoint
+    http_code=$(timeout "$INET_TIMEOUT" curl \
+        -x "http://127.0.0.1:5201" \
+        -s -o /dev/null \
+        -w "%{http_code}" \
+        --connect-timeout 15 \
+        "http://www.msftconnecttest.com/connecttest.txt" 2>/dev/null)
     
-    for url in "${TEST_URLS[@]}"; do
-        http_code=$(curl --proxy "$PROXY_TYPE" \
-                         -s -o /dev/null \
-                         -w "%{http_code}" \
-                         --connect-timeout "$CONNECT_TIMEOUT" \
-                         --max-time "$MAX_TIMEOUT" \
-                         "$url" 2>/dev/null)
-        
-        # 204 (Google) o 200 (Microsoft/Apple) = éxito
-        if [ "$http_code" = "204" ] || [ "$http_code" = "200" ]; then
-            return 0
-        fi
-    done
+    if [ "$http_code" = "200" ]; then
+        return 0
+    fi
     
-    # Ninguna URL respondió correctamente
+    # Método 3: Solo verificar que responde algo (cualquier cosa)
+    local respuesta
+    respuesta=$(echo -e "GET / HTTP/1.1\r\nHost: google.com\r\n\r\n" | \
+                timeout 10 nc 127.0.0.1 5201 2>/dev/null | head -c 50)
+    
+    if [ -n "$respuesta" ]; then
+        return 0
+    fi
+    
     return 1
 }
-
-# ─────────────────────────────────────────────────────────────────
-# Función para reconectar
-# ─────────────────────────────────────────────────────────────────
 
 reconectar() {
     local razon=$1
     echo ""
-    echo -e "${ROJO}╔══════════════════════════════════════════════════╗${NC}"
-    echo -e "${ROJO}║  $(date '+%H:%M:%S') - RECONECTANDO                          ║${NC}"
-    echo -e "${ROJO}║  Razón: $razon${NC}"
-    echo -e "${ROJO}╚══════════════════════════════════════════════════╝${NC}"
+    echo -e "${ROJO}[$(date '+%H:%M:%S')] ══ RECONECTANDO: $razon ══${NC}"
     
     kill "$PID" 2>/dev/null
     wait "$PID" 2>/dev/null
@@ -289,14 +248,10 @@ reconectar() {
     PID=$!
     
     echo -e "${VERDE}[$(date '+%H:%M:%S')] Nuevo PID: $PID${NC}"
-    
-    # Esperar que arranque y re-detectar proxy
-    sleep 4
-    detectar_tipo_proxy
-    
     echo ""
     
     CONSECUTIVE_FAILS=0
+    CHECK_COUNT=0
 }
 
 # ══════════════════════════════════════════════════════════════════
@@ -336,21 +291,21 @@ fi
 # === PANTALLA PRINCIPAL ===
 
 clear
-echo "═══════════════════════════════════════════════════════"
-echo "   SLIPSTREAM AUTO-RESTART v0.8"
-echo "   + Verificación de Internet Real"
-echo "═══════════════════════════════════════════════════════"
+echo "═══════════════════════════════════════════════"
+echo "   SLIPSTREAM AUTO-RESTART v1.0"
+echo "═══════════════════════════════════════════════"
 echo ""
-echo -e "  ${CYAN}Región:${NC}       $REGION"
-echo -e "  ${CYAN}Dominio:${NC}      $DOMAIN"
-echo -e "  ${CYAN}Resolver:${NC}     $IP"
-echo -e "  ${CYAN}Modo:${NC}         $([ "$MODO_AUTO" = true ] && echo 'Automático' || echo 'Interactivo')"
+echo -e "  ${CYAN}Región:${NC}     $REGION"
+echo -e "  ${CYAN}Dominio:${NC}    $DOMAIN"
+echo -e "  ${CYAN}Resolver:${NC}   $IP"
+echo -e "  ${CYAN}Modo:${NC}       $([ "$MODO_AUTO" = true ] && echo 'Automático' || echo 'Interactivo')"
 echo ""
 echo -e "  ${CYAN}Verificación:${NC}"
-echo -e "    • Check cada:   ${CHECK_INTERVAL}s"
-echo -e "    • Tolerancia:   ${FAIL_THRESHOLD} fallos (=$((FAIL_THRESHOLD * CHECK_INTERVAL))s de problema)"
-echo -e "    • Timeout:      ${MAX_TIMEOUT}s (evita falsos positivos)"
-echo "═══════════════════════════════════════════════════════"
+echo -e "    • Proceso/puerto: cada ${CHECK_INTERVAL}s"
+echo -e "    • Internet real:  cada $((CHECK_INTERVAL * INET_CHECK_EVERY))s"
+echo -e "    • Tolerancia:     ${FAIL_THRESHOLD} fallos ($((FAIL_THRESHOLD * CHECK_INTERVAL))s)"
+echo -e "    • Timeout:        ${INET_TIMEOUT}s"
+echo "═══════════════════════════════════════════════"
 echo ""
 
 # === BUCLE PRINCIPAL ===
@@ -374,22 +329,17 @@ while true; do
     echo -e "${VERDE}[$(date '+%H:%M:%S')] PID: $PID${NC}"
     
     CONSECUTIVE_FAILS=0
+    CHECK_COUNT=0
+    LAST_STATUS="INIT"
     
-    # Esperar que inicie
     sleep 5
     
-    # Detectar tipo de proxy
-    detectar_tipo_proxy
-    
-    echo ""
-    echo -e "${GRIS}[$(date '+%H:%M:%S')] Monitoreando conexión...${NC}"
+    echo -e "${GRIS}[$(date '+%H:%M:%S')] Monitoreando conexión e internet...${NC}"
     echo ""
 
     # ═══════════════════════════════════════════════════════════
     # BUCLE DE VIGILANCIA
     # ═══════════════════════════════════════════════════════════
-    
-    LAST_STATUS=""
     
     while [ "$(date +%s)" -lt "$end_ts" ]; do
         
@@ -397,11 +347,11 @@ while true; do
         resultado=$?
         
         case $resultado in
-            0)  # Internet OK
-                if [ $CONSECUTIVE_FAILS -gt 0 ]; then
-                    echo -e "${VERDE}[$(date '+%H:%M:%S')] ✓ Conexión restaurada${NC}"
-                elif [ "$LAST_STATUS" != "OK" ]; then
-                    echo -e "${VERDE}[$(date '+%H:%M:%S')] ✓ Internet funcionando${NC}"
+            0)  # Todo OK
+                if [ "$LAST_STATUS" != "OK" ] || [ $CONSECUTIVE_FAILS -gt 0 ]; then
+                    if [ $((CHECK_COUNT % INET_CHECK_EVERY)) -eq 0 ]; then
+                        echo -e "${VERDE}[$(date '+%H:%M:%S')] ✓ Internet OK${NC}"
+                    fi
                 fi
                 CONSECUTIVE_FAILS=0
                 LAST_STATUS="OK"
@@ -409,28 +359,28 @@ while true; do
             
             1)  # Sin internet
                 ((CONSECUTIVE_FAILS++))
-                echo -e "${AMARILLO}[$(date '+%H:%M:%S')] ⚠ Sin respuesta de internet (${CONSECUTIVE_FAILS}/${FAIL_THRESHOLD})${NC}"
-                LAST_STATUS="NO_INTERNET"
+                echo -e "${AMARILLO}[$(date '+%H:%M:%S')] ⚠ Sin internet (${CONSECUTIVE_FAILS}/${FAIL_THRESHOLD})${NC}"
+                LAST_STATUS="NO_INET"
                 
                 if [ $CONSECUTIVE_FAILS -ge $FAIL_THRESHOLD ]; then
                     reconectar "Sin internet por ${CONSECUTIVE_FAILS} intentos"
                 fi
                 ;;
             
-            2)  # Proceso muerto
-                echo -e "${ROJO}[$(date '+%H:%M:%S')] ✗ Proceso muerto${NC}"
-                reconectar "Proceso terminó inesperadamente"
-                LAST_STATUS="DEAD"
-                ;;
-            
-            3)  # Puerto no responde
+            2)  # Puerto no responde
                 ((CONSECUTIVE_FAILS++))
-                echo -e "${AMARILLO}[$(date '+%H:%M:%S')] ⚠ Puerto 5201 no responde (${CONSECUTIVE_FAILS}/${FAIL_THRESHOLD})${NC}"
-                LAST_STATUS="PORT_DOWN"
+                echo -e "${AMARILLO}[$(date '+%H:%M:%S')] ⚠ Puerto no responde (${CONSECUTIVE_FAILS}/${FAIL_THRESHOLD})${NC}"
+                LAST_STATUS="NO_PORT"
                 
                 if [ $CONSECUTIVE_FAILS -ge $FAIL_THRESHOLD ]; then
-                    reconectar "Puerto local sin respuesta"
+                    reconectar "Puerto sin respuesta"
                 fi
+                ;;
+            
+            3)  # Proceso muerto
+                echo -e "${ROJO}[$(date '+%H:%M:%S')] ✗ Proceso muerto${NC}"
+                reconectar "Proceso terminó"
+                LAST_STATUS="DEAD"
                 ;;
         esac
         
@@ -439,7 +389,7 @@ while true; do
 
     # Reinicio programado
     echo ""
-    echo -e "${CYAN}[$(date '+%H:%M:%S')] ═══ Reinicio programado ═══${NC}"
+    echo -e "${CYAN}[$(date '+%H:%M:%S')] Reinicio programado...${NC}"
     kill "$PID" 2>/dev/null
     wait "$PID" 2>/dev/null
     echo ""

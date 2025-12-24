@@ -14,6 +14,13 @@ W2='181.225.233.40'
 W3='181.225.233.110'
 W4='181.225.233.120'
 
+# === CONFIGURACIÓN TERMUX ===
+TMPDIR="${TMPDIR:-/data/data/com.termux/files/usr/tmp}"
+mkdir -p "$TMPDIR" 2>/dev/null
+
+LOG_FILE="${TMPDIR}/slipstream.log"
+TRAFFIC_FILE="${TMPDIR}/slipstream_last_traffic"
+
 # === FORZAR INSTALACIÓN NO INTERACTIVA ===
 export DEBIAN_FRONTEND=noninteractive
 
@@ -222,7 +229,6 @@ calcular_espera() {
 
 PID=""
 PID_MONITOR=""
-LOG_FILE="/tmp/slipstream.log"
 
 cleanup() {
     echo ""
@@ -238,7 +244,7 @@ cleanup() {
         wait "$PID_MONITOR" 2>/dev/null
     fi
     
-    rm -f "$LOG_FILE" /tmp/slipstream_last_traffic 2>/dev/null
+    rm -f "$LOG_FILE" "$TRAFFIC_FILE" 2>/dev/null
     
     termux-wake-unlock 2>/dev/null
     echo "[$(date '+%H:%M:%S')] Terminado."
@@ -258,7 +264,7 @@ monitorear_logs() {
         
         # Solo detectar raw bytes (tráfico real)
         if echo "$linea" | grep -q "raw bytes:"; then
-            date +%s > /tmp/slipstream_last_traffic
+            date +%s > "$TRAFFIC_FILE"
         fi
     done &
     
@@ -268,8 +274,8 @@ monitorear_logs() {
 # === VERIFICACIÓN SIMPLIFICADA ===
 verificar_trafico() {
     # Verificar que haya habido raw bytes en los últimos 10 segundos
-    if [ -f /tmp/slipstream_last_traffic ]; then
-        local last_traffic=$(cat /tmp/slipstream_last_traffic)
+    if [ -f "$TRAFFIC_FILE" ]; then
+        local last_traffic=$(cat "$TRAFFIC_FILE")
         local now=$(date +%s)
         local diff=$((now - last_traffic))
         
@@ -346,7 +352,7 @@ while true; do
     echo ""
 
     # Limpiar marcador de tráfico
-    rm -f /tmp/slipstream_last_traffic
+    rm -f "$TRAFFIC_FILE"
     
     # Iniciar monitor
     monitorear_logs "$LOG_FILE"
@@ -355,7 +361,7 @@ while true; do
     sleep 5
     
     # Marcar inicio para evitar falso positivo inicial
-    date +%s > /tmp/slipstream_last_traffic
+    date +%s > "$TRAFFIC_FILE"
     
     # Lanzar slipstream
     ./slipstream-client \
@@ -385,11 +391,11 @@ while true; do
             sleep "$RETRY_DELAY"
             
             # Reiniciar
-            rm -f /tmp/slipstream_last_traffic
+            rm -f "$TRAFFIC_FILE"
             monitorear_logs "$LOG_FILE"
             
             sleep 5
-            date +%s > /tmp/slipstream_last_traffic
+            date +%s > "$TRAFFIC_FILE"
             
             ./slipstream-client \
                 --tcp-listen-port=5201 \

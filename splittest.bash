@@ -221,23 +221,30 @@ calcular_espera() {
 }
 
 PID=""
-MONITOR_PID=""
+LOG_MONITOR_PID=""
 TIMESTAMP_FILE="$HOME/.slipstream_rawbytes_ts"
+LOG_FILE="$HOME/.slipstream_output.log"
 
 cleanup() {
     echo ""
     echo "[$(date '+%H:%M:%S')] Deteniendo..."
-    if [ -n "$MONITOR_PID" ] && kill -0 "$MONITOR_PID" 2>/dev/null; then
-        kill "$MONITOR_PID" 2>/dev/null
-        wait "$MONITOR_PID" 2>/dev/null
+    
+    if [ -n "$LOG_MONITOR_PID" ] && kill -0 "$LOG_MONITOR_PID" 2>/dev/null; then
+        kill "$LOG_MONITOR_PID" 2>/dev/null
+        wait "$LOG_MONITOR_PID" 2>/dev/null
     fi
+    
     if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
         kill "$PID" 2>/dev/null
         wait "$PID" 2>/dev/null
     fi
+    
     # Matar cualquier proceso slipstream-client huérfano
     pkill -f "slipstream-client" 2>/dev/null
+    
     rm -f "$TIMESTAMP_FILE" 2>/dev/null
+    rm -f "$LOG_FILE" 2>/dev/null
+    
     termux-wake-unlock 2>/dev/null
     echo "[$(date '+%H:%M:%S')] Terminado."
     exit 0
@@ -272,7 +279,7 @@ fi
 
 clear
 echo "========================================="
-echo "   SLIPSTREAM AUTO-RESTART v0.8"
+echo "   SLIPSTREAM AUTO-RESTART v0.9"
 echo "========================================="
 echo ""
 echo "Configuración:"
@@ -312,10 +319,10 @@ check_raw_bytes() {
 
 # Función para detener slipstream completamente
 stop_slipstream() {
-    # Matar el monitor
-    if [ -n "$MONITOR_PID" ] && kill -0 "$MONITOR_PID" 2>/dev/null; then
-        kill "$MONITOR_PID" 2>/dev/null
-        wait "$MONITOR_PID" 2>/dev/null
+    # Matar el monitor de logs
+    if [ -n "$LOG_MONITOR_PID" ] && kill -0 "$LOG_MONITOR_PID" 2>/dev/null; then
+        kill "$LOG_MONITOR_PID" 2>/dev/null
+        wait "$LOG_MONITOR_PID" 2>/dev/null
     fi
     
     # Matar el proceso slipstream-client directamente
@@ -330,7 +337,7 @@ stop_slipstream() {
     # Esperar un momento para asegurar que todo se ha detenido
     sleep 1
     
-    MONITOR_PID=""
+    LOG_MONITOR_PID=""
     PID=""
 }
 
@@ -340,27 +347,35 @@ start_slipstream() {
     
     # Resetear timestamp
     echo $(date +%s) > "$TIMESTAMP_FILE"
+    
+    # Limpiar log anterior
+    > "$LOG_FILE"
 
-    # Iniciar slipstream con monitor de salida
+    # Iniciar slipstream-client en segundo plano
     ./slipstream-client \
         --tcp-listen-port=5201 \
         --resolver="${IP}:53" \
         --domain="${DOMAIN}" \
         --keep-alive-interval=120 \
-        --congestion-control=cubic 2>&1 | while IFS= read -r line; do
+        --congestion-control=cubic > "$LOG_FILE" 2>&1 &
+    
+    PID=$!
+    
+    # Iniciar monitor de logs en segundo plano
+    (
+        tail -f "$LOG_FILE" 2>/dev/null | while IFS= read -r line; do
             echo "$line"
             if echo "$line" | grep -q "raw bytes"; then
                 echo $(date +%s) > "$TIMESTAMP_FILE"
             fi
-        done &
+        done
+    ) &
     
-    MONITOR_PID=$!
+    LOG_MONITOR_PID=$!
     
-    # Obtener el PID real de slipstream-client
-    sleep 1
-    PID=$(pgrep -P $MONITOR_PID slipstream-client 2>/dev/null)
+    sleep 0.5
     
-    echo "[$(date '+%H:%M:%S')] slipstream-client iniciado (Monitor PID: $MONITOR_PID, Cliente PID: $PID)"
+    echo "[$(date '+%H:%M:%S')] slipstream-client iniciado (PID: $PID, Monitor PID: $LOG_MONITOR_PID)"
 }
 
 while true; do
@@ -374,8 +389,8 @@ while true; do
 
     # Monitoreo continuo
     while [ "$(date +%s)" -lt "$end_ts" ]; do
-        # Verificar si el monitor murió
-        if ! kill -0 "$MONITOR_PID" 2>/dev/null; then
+        # Verificar si el proceso principal murió
+        if ! kill -0 "$PID" 2>/dev/null; then
             echo ""
             echo "[$(date '+%H:%M:%S')] slipstream-client se cayó. Reconectando..."
             

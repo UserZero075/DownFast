@@ -14,9 +14,7 @@ W2='181.225.233.40'
 W3='181.225.233.110'
 W4='181.225.233.120'
 
-# === FORZAR INSTALACIÓN NO INTERACTIVA ===
 export DEBIAN_FRONTEND=noninteractive
-
 termux-wake-lock 2>/dev/null
 
 # Colores
@@ -40,18 +38,8 @@ REGION=""
 
 while [[ $# -gt 0 ]]; do
     case ${1^^} in
-        -CU)
-            REGION="CU"
-            DOMAIN="$CU"
-            MODO_AUTO=true
-            shift
-            ;;
-        -US)
-            REGION="US"
-            DOMAIN="$US"
-            MODO_AUTO=true
-            shift
-            ;;
+        -CU) REGION="CU"; DOMAIN="$CU"; MODO_AUTO=true; shift ;;
+        -US) REGION="US"; DOMAIN="$US"; MODO_AUTO=true; shift ;;
         -D1) IP="$D1"; shift ;;
         -D2) IP="$D2"; shift ;;
         -D3) IP="$D3"; shift ;;
@@ -62,45 +50,31 @@ while [[ $# -gt 0 ]]; do
         -W4) IP="$W4"; shift ;;
         *)
             echo -e "${ROJO}Flag desconocido: $1${NC}"
-            echo ""
             echo "Uso: $0 [-CU|-US] [-D1|-D2|-D3|-D4|-W1|-W2|-W3|-W4]"
             exit 1
             ;;
     esac
 done
 
-# Validaciones
 if [ "$MODO_AUTO" = true ] && [ -z "$IP" ]; then
-    echo -e "${ROJO}Error: Debes especificar tanto la región (-CU o -US) como el DNS${NC}"
+    echo -e "${ROJO}Error: Especifica región y DNS${NC}"
     exit 1
 fi
 
 if [ -n "$IP" ] && [ "$MODO_AUTO" = false ]; then
-    echo -e "${ROJO}Error: Debes especificar la región (-CU o -US) junto con el DNS${NC}"
+    echo -e "${ROJO}Error: Especifica región (-CU o -US)${NC}"
     exit 1
 fi
 
-# === VERIFICAR DEPENDENCIAS ===
+# === DEPENDENCIAS ===
 
 echo ""
 imprimir_mensaje "INFO" "$CYAN" "Verificando dependencias..."
 
-# Brotli
 if [ -x "/data/data/com.termux/files/usr/bin/brotli" ]; then
     imprimir_mensaje "OK" "$VERDE" "brotli ✓"
 else
-    imprimir_mensaje "INFO" "$AMARILLO" "Instalando brotli..."
     yes | pkg install -y brotli 2>/dev/null
-    [ -x "/data/data/com.termux/files/usr/bin/brotli" ] && imprimir_mensaje "OK" "$VERDE" "brotli ✓"
-fi
-
-# Netcat (para verificación de conexión)
-if command -v nc >/dev/null 2>&1; then
-    imprimir_mensaje "OK" "$VERDE" "netcat ✓"
-else
-    imprimir_mensaje "INFO" "$AMARILLO" "Instalando netcat..."
-    yes | pkg install -y netcat-openbsd 2>/dev/null
-    command -v nc >/dev/null 2>&1 && imprimir_mensaje "OK" "$VERDE" "netcat ✓"
 fi
 
 echo ""
@@ -115,7 +89,7 @@ if [ ! -f "slipstream-client" ]; then
 fi
 chmod +x slipstream-client 2>/dev/null
 
-# === MENÚ CON FLECHAS ===
+# === MENÚ ===
 
 SELECCION_GLOBAL=""
 
@@ -125,7 +99,6 @@ menu_flechas() {
     local opciones=("$@")
     local sel=0
     local total=${#opciones[@]}
-    local key
 
     mostrar() {
         clear
@@ -153,11 +126,8 @@ menu_flechas() {
         IFS= read -rsn1 key
         if [[ "$key" == $'\x1b' ]]; then
             read -rsn2 -t 0.1 key
-            if [[ "$key" == "[A" ]]; then
-                ((sel--)); [ $sel -lt 0 ] && sel=$((total - 1)); mostrar
-            elif [[ "$key" == "[B" ]]; then
-                ((sel++)); [ $sel -ge $total ] && sel=0; mostrar
-            fi
+            [[ "$key" == "[A" ]] && { ((sel--)); [ $sel -lt 0 ] && sel=$((total-1)); mostrar; }
+            [[ "$key" == "[B" ]] && { ((sel++)); [ $sel -ge $total ] && sel=0; mostrar; }
         elif [[ "$key" == "" ]]; then
             SELECCION_GLOBAL="${opciones[$sel]}"
             return 0
@@ -166,119 +136,71 @@ menu_flechas() {
 }
 
 calcular_espera() {
-    local minuto=$(date +%M)
-    local segundo=$(date +%S)
-    minuto=$((10#$minuto))
-    segundo=$((10#$segundo))
+    local minuto=$((10#$(date +%M)))
+    local segundo=$((10#$(date +%S)))
     local ahora=$((minuto * 60 + segundo))
     local objetivos=(22 322 622 922 1222 1522 1822 2122 2422 2722 3022 3322)
 
     for objetivo in "${objetivos[@]}"; do
-        if [ "$ahora" -lt "$objetivo" ]; then
-            echo $((objetivo - ahora))
-            return
-        fi
+        [ "$ahora" -lt "$objetivo" ] && echo $((objetivo - ahora)) && return
     done
     echo $((3600 + 22 - ahora))
 }
 
 # ══════════════════════════════════════════════════════════════════
-#  SISTEMA DE VERIFICACIÓN DE CONEXIÓN ROBUSTO
+#  VERIFICACIÓN SIMPLIFICADA (sin verificar resolver)
 # ══════════════════════════════════════════════════════════════════
 
-# Configuración de verificación
-CHECK_INTERVAL=5          # Verificar cada 5 segundos
-FAIL_THRESHOLD=4          # Fallos consecutivos antes de reconectar
-PING_TIMEOUT=10           # Timeout generoso (10 segundos)
-CONSECUTIVE_FAILS=0       # Contador de fallos consecutivos
-LAST_CHECK_STATUS=""      # Estado de última verificación
+CHECK_INTERVAL=5
+FAIL_THRESHOLD=3
+CONSECUTIVE_FAILS=0
 
-# Códigos de retorno:
-#   0 = Todo OK
-#   1 = Posible problema de red (fallo suave)
-#   2 = Proceso muerto (reconexión inmediata)
-#   3 = Puerto local no responde (problema grave)
+# Retorna:
+#   0 = OK
+#   1 = Puerto local no responde (fallo suave, puede ser que aún está iniciando)
+#   2 = Proceso muerto
 
 verificar_conexion() {
-    local estado_proceso=true
-    local estado_puerto_local=true
-    local estado_resolver=true
-    
-    # ─────────────────────────────────────────────────────────
-    # NIVEL 1: Verificar que el proceso sigue vivo (instantáneo)
-    # ─────────────────────────────────────────────────────────
+    # NIVEL 1: ¿Proceso vivo?
     if ! kill -0 "$PID" 2>/dev/null; then
-        LAST_CHECK_STATUS="PROCESO_MUERTO"
         return 2
     fi
     
-    # ─────────────────────────────────────────────────────────
-    # NIVEL 2: Verificar puerto local 5201 (conexión rápida)
-    # Este siempre debería responder si slipstream funciona
-    # ─────────────────────────────────────────────────────────
-    if ! timeout 3 bash -c "echo >/dev/tcp/127.0.0.1/5201" 2>/dev/null; then
-        # Alternativa con netcat
-        if ! nc -z -w 3 127.0.0.1 5201 2>/dev/null; then
-            LAST_CHECK_STATUS="PUERTO_LOCAL_CAIDO"
-            return 3
+    # NIVEL 2: ¿Puerto local responde?
+    # Método 1: /dev/tcp (más compatible)
+    if timeout 3 bash -c "echo >/dev/tcp/127.0.0.1/5201" 2>/dev/null; then
+        return 0
+    fi
+    
+    # Método 2: netcat como fallback
+    if command -v nc >/dev/null 2>&1; then
+        if nc -z -w 2 127.0.0.1 5201 2>/dev/null; then
+            return 0
         fi
     fi
     
-    # ─────────────────────────────────────────────────────────
-    # NIVEL 3: Verificar conectividad al resolver DNS
-    # Timeout generoso para evitar falsos positivos
-    # ─────────────────────────────────────────────────────────
-    if ! nc -z -w "$PING_TIMEOUT" "$IP" 53 2>/dev/null; then
-        # Fallback: intentar con /dev/tcp
-        if ! timeout "$PING_TIMEOUT" bash -c "echo >/dev/tcp/${IP}/53" 2>/dev/null; then
-            LAST_CHECK_STATUS="RESOLVER_INACCESIBLE"
-            return 1
+    # Método 3: Verificar con ss/netstat si el puerto está escuchando
+    if command -v ss >/dev/null 2>&1; then
+        if ss -tln 2>/dev/null | grep -q ":5201 "; then
+            return 0
         fi
     fi
     
-    LAST_CHECK_STATUS="OK"
-    return 0
+    # Si llegamos aquí, el puerto no responde
+    return 1
 }
 
-# Función para mostrar estado de conexión
-mostrar_estado_check() {
-    local timestamp=$(date '+%H:%M:%S')
-    local estado=$1
-    local fails=$2
-    
-    case $estado in
-        "OK")
-            echo -e "${GRIS}[${timestamp}] Check: ✓ Conexión estable${NC}"
-            ;;
-        "PROCESO_MUERTO")
-            echo -e "${ROJO}[${timestamp}] Check: ✗ Proceso muerto - Reconexión inmediata${NC}"
-            ;;
-        "PUERTO_LOCAL_CAIDO")
-            echo -e "${ROJO}[${timestamp}] Check: ✗ Puerto local no responde - Reconexión inmediata${NC}"
-            ;;
-        "RESOLVER_INACCESIBLE")
-            echo -e "${AMARILLO}[${timestamp}] Check: ⚠ Resolver inaccesible (${fails}/${FAIL_THRESHOLD} fallos)${NC}"
-            ;;
-    esac
-}
-
-# Función para reconectar
 reconectar() {
     local razon=$1
     echo ""
-    echo -e "${AMARILLO}[$(date '+%H:%M:%S')] ═══════════════════════════════════════${NC}"
+    echo -e "${AMARILLO}[$(date '+%H:%M:%S')] ══════════════════════════════════${NC}"
     echo -e "${AMARILLO}[$(date '+%H:%M:%S')] Reconectando: $razon${NC}"
-    echo -e "${AMARILLO}[$(date '+%H:%M:%S')] ═══════════════════════════════════════${NC}"
+    echo -e "${AMARILLO}[$(date '+%H:%M:%S')] ══════════════════════════════════${NC}"
     
-    # Matar proceso si sigue vivo
-    if kill -0 "$PID" 2>/dev/null; then
-        kill "$PID" 2>/dev/null
-        wait "$PID" 2>/dev/null
-    fi
-    
+    kill "$PID" 2>/dev/null
+    wait "$PID" 2>/dev/null
     sleep 2
     
-    # Relanzar
     ./slipstream-client \
         --tcp-listen-port=5201 \
         --resolver="${IP}:53" \
@@ -300,10 +222,8 @@ PID=""
 cleanup() {
     echo ""
     echo "[$(date '+%H:%M:%S')] Deteniendo..."
-    if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
-        kill "$PID" 2>/dev/null
-        wait "$PID" 2>/dev/null
-    fi
+    kill "$PID" 2>/dev/null
+    wait "$PID" 2>/dev/null
     termux-wake-unlock 2>/dev/null
     echo "[$(date '+%H:%M:%S')] Terminado."
     exit 0
@@ -311,7 +231,7 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM
 
-# === SELECCIÓN (modo interactivo) ===
+# === SELECCIÓN INTERACTIVA ===
 
 if [ "$MODO_AUTO" = false ]; then
     sleep 0.5
@@ -333,24 +253,16 @@ fi
 
 clear
 echo "═══════════════════════════════════════════════"
-echo "   SLIPSTREAM AUTO-RESTART v0.6"
-echo "   + Sistema de Verificación Inteligente"
+echo "   SLIPSTREAM AUTO-RESTART v0.7"
 echo "═══════════════════════════════════════════════"
 echo ""
-echo "Configuración:"
 echo -e "  ${CYAN}Región:${NC}     $REGION"
 echo -e "  ${CYAN}Dominio:${NC}    $DOMAIN"
 echo -e "  ${CYAN}Resolver:${NC}   $IP"
-if [ "$MODO_AUTO" = true ]; then
-    echo -e "  ${AMARILLO}Modo:${NC}       Automático"
-else
-    echo -e "  ${VERDE}Modo:${NC}       Interactivo"
-fi
+echo -e "  ${CYAN}Modo:${NC}       $([ "$MODO_AUTO" = true ] && echo 'Automático' || echo 'Interactivo')"
 echo ""
-echo "Verificación de conexión:"
-echo -e "  ${CYAN}Intervalo:${NC}  Cada ${CHECK_INTERVAL}s"
-echo -e "  ${CYAN}Tolerancia:${NC} ${FAIL_THRESHOLD} fallos consecutivos"
-echo -e "  ${CYAN}Timeout:${NC}    ${PING_TIMEOUT}s (evita falsos positivos)"
+echo -e "  ${CYAN}Check cada:${NC} ${CHECK_INTERVAL}s"
+echo -e "  ${CYAN}Tolerancia:${NC} ${FAIL_THRESHOLD} fallos"
 echo "═══════════════════════════════════════════════"
 echo ""
 
@@ -361,7 +273,7 @@ while true; do
     end_ts=$(( $(date +%s) + espera ))
 
     echo "[$(date '+%H:%M:%S')] Iniciando slipstream-client..."
-    echo "[$(date '+%H:%M:%S')] Próximo reinicio programado en ${espera}s (~$((espera/60))min)"
+    echo "[$(date '+%H:%M:%S')] Próximo reinicio: ${espera}s (~$((espera/60))min)"
     echo ""
 
     ./slipstream-client \
@@ -373,16 +285,14 @@ while true; do
     PID=$!
 
     echo -e "${VERDE}[$(date '+%H:%M:%S')] PID: $PID${NC}"
-    echo ""
-
-    CONSECUTIVE_FAILS=0
-    LAST_SHOWN_FAILS=-1
     
-    # Esperar un poco para que el proceso arranque
+    CONSECUTIVE_FAILS=0
+    
+    # Esperar que inicie
     sleep 3
 
     # ═══════════════════════════════════════════════════════════
-    # BUCLE DE VIGILANCIA CON VERIFICACIÓN DE CONEXIÓN
+    # BUCLE DE VIGILANCIA
     # ═══════════════════════════════════════════════════════════
     
     while [ "$(date +%s)" -lt "$end_ts" ]; do
@@ -391,51 +301,35 @@ while true; do
         resultado=$?
         
         case $resultado in
-            0)  # Todo OK
+            0)  # OK
                 if [ $CONSECUTIVE_FAILS -gt 0 ]; then
-                    echo -e "${VERDE}[$(date '+%H:%M:%S')] Conexión recuperada ✓${NC}"
+                    echo -e "${VERDE}[$(date '+%H:%M:%S')] ✓ Conexión OK${NC}"
                 fi
                 CONSECUTIVE_FAILS=0
                 ;;
             
-            1)  # Fallo suave (resolver inaccesible)
+            1)  # Puerto no responde
                 ((CONSECUTIVE_FAILS++))
+                echo -e "${AMARILLO}[$(date '+%H:%M:%S')] ⚠ Puerto 5201 no responde (${CONSECUTIVE_FAILS}/${FAIL_THRESHOLD})${NC}"
                 
-                # Solo mostrar si cambió el número de fallos
-                if [ $CONSECUTIVE_FAILS -ne $LAST_SHOWN_FAILS ]; then
-                    mostrar_estado_check "$LAST_CHECK_STATUS" $CONSECUTIVE_FAILS
-                    LAST_SHOWN_FAILS=$CONSECUTIVE_FAILS
-                fi
-                
-                # ¿Alcanzó el umbral?
                 if [ $CONSECUTIVE_FAILS -ge $FAIL_THRESHOLD ]; then
-                    reconectar "Resolver inaccesible por ${CONSECUTIVE_FAILS} intentos"
+                    reconectar "Puerto local sin respuesta"
                 fi
                 ;;
             
-            2)  # Proceso muerto - reconexión inmediata
-                mostrar_estado_check "$LAST_CHECK_STATUS" $CONSECUTIVE_FAILS
-                reconectar "Proceso terminó inesperadamente"
-                ;;
-            
-            3)  # Puerto local no responde - reconexión inmediata
-                mostrar_estado_check "$LAST_CHECK_STATUS" $CONSECUTIVE_FAILS
-                reconectar "Puerto local 5201 no responde"
+            2)  # Proceso muerto
+                echo -e "${ROJO}[$(date '+%H:%M:%S')] ✗ Proceso muerto${NC}"
+                reconectar "Proceso terminó"
                 ;;
         esac
         
         sleep "$CHECK_INTERVAL"
     done
 
-    # ═══════════════════════════════════════════════════════════
-    # REINICIO PROGRAMADO (cada 5 minutos en segundo :22)
-    # ═══════════════════════════════════════════════════════════
-    
+    # Reinicio programado
     echo ""
     echo -e "${CYAN}[$(date '+%H:%M:%S')] Reinicio programado...${NC}"
-    if kill -0 "$PID" 2>/dev/null; then
-        kill "$PID" 2>/dev/null
-        wait "$PID" 2>/dev/null
-    fi
+    kill "$PID" 2>/dev/null
+    wait "$PID" 2>/dev/null
     echo ""
 done

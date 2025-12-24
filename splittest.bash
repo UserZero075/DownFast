@@ -223,7 +223,6 @@ calcular_espera() {
 PID=""
 PID_MONITOR=""
 LOG_FILE="/tmp/slipstream.log"
-ULTIMO_TRAFICO=0
 
 cleanup() {
     echo ""
@@ -239,7 +238,7 @@ cleanup() {
         wait "$PID_MONITOR" 2>/dev/null
     fi
     
-    rm -f "$LOG_FILE" /tmp/slipstream_dead /tmp/slipstream_stream_reset /tmp/slipstream_last_traffic 2>/dev/null
+    rm -f "$LOG_FILE" /tmp/slipstream_last_traffic 2>/dev/null
     
     termux-wake-unlock 2>/dev/null
     echo "[$(date '+%H:%M:%S')] Terminado."
@@ -248,7 +247,7 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM
 
-# === MONITOR DE LOGS MEJORADO ===
+# === MONITOR DE LOGS SIMPLIFICADO ===
 monitorear_logs() {
     local logfile="$1"
     
@@ -257,25 +256,7 @@ monitorear_logs() {
     tail -F "$logfile" 2>/dev/null | while IFS= read -r linea; do
         echo "$linea"
         
-        # Detectar errores críticos
-        if echo "$linea" | grep -qE "Connection closed|Client exit, ret = -1|Failed to connect"; then
-            echo "[$(date '+%H:%M:%S')] 💀 Conexión muerta (error crítico)"
-            echo "1" > /tmp/slipstream_dead
-        fi
-        
-        # Detectar stream reset (signo de problema)
-        if echo "$linea" | grep -q "stream reset"; then
-            echo "[$(date '+%H:%M:%S')] ⚠️ Stream reset detectado"
-            echo "1" > /tmp/slipstream_stream_reset
-        fi
-        
-        # Detectar closed stream (conexión degradada)
-        if echo "$linea" | grep -q "recv: closed stream"; then
-            echo "[$(date '+%H:%M:%S')] ⚠️ Closed stream detectado"
-            echo "1" > /tmp/slipstream_stream_reset
-        fi
-        
-        # Detectar tráfico normal (raw bytes = conexión OK)
+        # Solo detectar raw bytes (tráfico real)
         if echo "$linea" | grep -q "raw bytes:"; then
             date +%s > /tmp/slipstream_last_traffic
         fi
@@ -284,63 +265,21 @@ monitorear_logs() {
     PID_MONITOR=$!
 }
 
-# === VERIFICACIÓN DE SALUD MEJORADA ===
-
-verificar_salud() {
-    local pid=$1
-    
-    # 1. Verificar que el proceso exista
-    if ! kill -0 "$pid" 2>/dev/null; then
-        echo "[$(date '+%H:%M:%S')] ✗ Proceso muerto"
-        return 1
-    fi
-    
-    # 2. Verificar errores críticos
-    if [ -f /tmp/slipstream_dead ]; then
-        rm -f /tmp/slipstream_dead
-        echo "[$(date '+%H:%M:%S')] ✗ Error crítico detectado"
-        return 1
-    fi
-    
-    # 3. Verificar stream reset (3 strikes y fuera)
-    if [ -f /tmp/slipstream_stream_reset ]; then
-        local reset_count=$(cat /tmp/slipstream_stream_reset 2>/dev/null || echo 0)
-        reset_count=$((reset_count + 1))
-        
-        if [ "$reset_count" -ge 3 ]; then
-            rm -f /tmp/slipstream_stream_reset
-            echo "[$(date '+%H:%M:%S')] ✗ Múltiples stream resets (${reset_count})"
-            return 1
-        else
-            echo "$reset_count" > /tmp/slipstream_stream_reset
-        fi
-    fi
-    
-    # 4. Verificar que haya habido tráfico recientemente (últimos 30 seg)
+# === VERIFICACIÓN SIMPLIFICADA ===
+verificar_trafico() {
+    # Verificar que haya habido raw bytes en los últimos 10 segundos
     if [ -f /tmp/slipstream_last_traffic ]; then
         local last_traffic=$(cat /tmp/slipstream_last_traffic)
         local now=$(date +%s)
         local diff=$((now - last_traffic))
         
-        if [ "$diff" -gt 30 ]; then
-            echo "[$(date '+%H:%M:%S')] ✗ Sin tráfico desde hace ${diff}s"
+        if [ "$diff" -gt 10 ]; then
+            echo "[$(date '+%H:%M:%S')] ⚠️ Sin tráfico (raw bytes) desde hace ${diff}s"
             return 1
         fi
-    fi
-    
-    # 5. Verificar conexiones UDP
-    if command -v ss &>/dev/null; then
-        local conns=$(ss -nuap 2>/dev/null | grep "pid=$pid" | grep -c "${IP}:53")
-        if [ "$conns" -lt 1 ]; then
-            echo "[$(date '+%H:%M:%S')] ✗ Sin conexión UDP"
-            return 1
-        fi
-    fi
-    
-    # 6. Verificar puerto local
-    if ! timeout 3 bash -c "echo > /dev/tcp/127.0.0.1/5201" 2>/dev/null; then
-        echo "[$(date '+%H:%M:%S')] ✗ Puerto 5201 no responde"
-        return 1
+    else
+        # Si nunca ha habido tráfico, dar 15 segundos de gracia al inicio
+        return 0
     fi
     
     return 0
@@ -373,7 +312,7 @@ fi
 
 clear
 echo "========================================="
-echo "   SLIPSTREAM AUTO-RESTART v0.8"
+echo "   SLIPSTREAM AUTO-RESTART v1.0"
 echo "========================================="
 echo ""
 echo "Configuración:"
@@ -386,20 +325,15 @@ else
     echo -e "  ${VERDE}Modo:${NC}     Interactivo"
 fi
 echo ""
-echo "Detección mejorada:"
-echo -e "  ${CYAN}•${NC} Stream reset"
-echo -e "  ${CYAN}•${NC} Closed stream"
-echo -e "  ${CYAN}•${NC} Sin tráfico >30s"
-echo -e "  ${CYAN}•${NC} Conexión UDP"
-echo -e "  ${CYAN}•${NC} Puerto local"
+echo "Detección:"
+echo -e "  ${CYAN}•${NC} Sin raw bytes >10s = Reconexión"
+echo -e "  ${CYAN}•${NC} Reinicio programado cada 5 min"
 echo "========================================="
 echo ""
 
 # === PARÁMETROS ===
-CHECK_EVERY=5
+CHECK_EVERY=3
 RETRY_DELAY=2
-FALLOS_CONSECUTIVOS=0
-MAX_FALLOS=2
 
 # === BUCLE PRINCIPAL ===
 
@@ -411,11 +345,17 @@ while true; do
     echo "[$(date '+%H:%M:%S')] ⏰ Próximo reinicio en ${espera}s (~$((espera/60))min)"
     echo ""
 
-    # Limpiar archivos temporales
-    rm -f /tmp/slipstream_dead /tmp/slipstream_stream_reset /tmp/slipstream_last_traffic
+    # Limpiar marcador de tráfico
+    rm -f /tmp/slipstream_last_traffic
     
     # Iniciar monitor
     monitorear_logs "$LOG_FILE"
+    
+    # Dar 5 segundos antes de iniciar verificaciones (para que establezca conexión)
+    sleep 5
+    
+    # Marcar inicio para evitar falso positivo inicial
+    date +%s > /tmp/slipstream_last_traffic
     
     # Lanzar slipstream
     ./slipstream-client \
@@ -425,51 +365,46 @@ while true; do
         --keep-alive-interval=120 \
         --congestion-control=cubic 2>&1 | tee -a "$LOG_FILE" &
     PID=$!
-    
-    FALLOS_CONSECUTIVOS=0
 
     # Bucle de vigilancia
     while [ "$(date +%s)" -lt "$end_ts" ]; do
-        if ! verificar_salud "$PID"; then
-            ((FALLOS_CONSECUTIVOS++))
+        if ! verificar_trafico; then
+            echo ""
+            echo "[$(date '+%H:%M:%S')] 🔄 Conexión muerta. Reiniciando..."
             
-            if [ "$FALLOS_CONSECUTIVOS" -ge "$MAX_FALLOS" ]; then
-                echo ""
-                echo "[$(date '+%H:%M:%S')] 🔄 ${FALLOS_CONSECUTIVOS} fallos. Reiniciando..."
-                
-                if kill -0 "$PID" 2>/dev/null; then
-                    kill "$PID" 2>/dev/null
-                    wait "$PID" 2>/dev/null
-                fi
-                
-                if [ -n "$PID_MONITOR" ] && kill -0 "$PID_MONITOR" 2>/dev/null; then
-                    kill "$PID_MONITOR" 2>/dev/null
-                    wait "$PID_MONITOR" 2>/dev/null
-                fi
-                
-                sleep "$RETRY_DELAY"
-                
-                # Limpiar y reiniciar
-                rm -f /tmp/slipstream_dead /tmp/slipstream_stream_reset /tmp/slipstream_last_traffic
-                
-                monitorear_logs "$LOG_FILE"
-                
-                ./slipstream-client \
-                    --tcp-listen-port=5201 \
-                    --resolver="${IP}:53" \
-                    --domain="${DOMAIN}" \
-                    --keep-alive-interval=120 \
-                    --congestion-control=cubic 2>&1 | tee -a "$LOG_FILE" &
-                PID=$!
-                
-                FALLOS_CONSECUTIVOS=0
-                echo "[$(date '+%H:%M:%S')] ✓ Reconexión completada"
-                echo ""
+            if kill -0 "$PID" 2>/dev/null; then
+                kill "$PID" 2>/dev/null
+                wait "$PID" 2>/dev/null
             fi
-        else
-            if [ "$FALLOS_CONSECUTIVOS" -gt 0 ]; then
-                FALLOS_CONSECUTIVOS=0
+            
+            if [ -n "$PID_MONITOR" ] && kill -0 "$PID_MONITOR" 2>/dev/null; then
+                kill "$PID_MONITOR" 2>/dev/null
+                wait "$PID_MONITOR" 2>/dev/null
             fi
+            
+            sleep "$RETRY_DELAY"
+            
+            # Reiniciar
+            rm -f /tmp/slipstream_last_traffic
+            monitorear_logs "$LOG_FILE"
+            
+            sleep 5
+            date +%s > /tmp/slipstream_last_traffic
+            
+            ./slipstream-client \
+                --tcp-listen-port=5201 \
+                --resolver="${IP}:53" \
+                --domain="${DOMAIN}" \
+                --keep-alive-interval=120 \
+                --congestion-control=cubic 2>&1 | tee -a "$LOG_FILE" &
+            PID=$!
+            
+            echo "[$(date '+%H:%M:%S')] ✓ Reconexión completada"
+            echo ""
+            
+            # Recalcular tiempo de espera
+            espera=$(calcular_espera)
+            end_ts=$(( $(date +%s) + espera ))
         fi
         
         sleep "$CHECK_EVERY"
@@ -477,7 +412,7 @@ while true; do
 
     # Reinicio programado
     echo ""
-    echo "[$(date '+%H:%M:%S')] ⏰ Reinicio programado..."
+    echo "[$(date '+%H:%M:%S')] ⏰ Reinicio programado (cada 5 min)..."
     
     if kill -0 "$PID" 2>/dev/null; then
         kill "$PID" 2>/dev/null

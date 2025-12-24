@@ -141,34 +141,6 @@ fi
 
 chmod +x slipstream-client 2>/dev/null
 
-# === FUNCIÓN DE VERIFICACIÓN DE SALUD DEL TÚNEL ===
-
-verificar_tunel() {
-    local output
-    output=$(ssh -p 5201 \
-        -o BatchMode=yes \
-        -o NumberOfPasswordPrompts=0 \
-        -o PasswordAuthentication=no \
-        -o KbdInteractiveAuthentication=no \
-        -o ChallengeResponseAuthentication=no \
-        -o PubkeyAuthentication=no \
-        -o PreferredAuthentications=none \
-        -o StrictHostKeyChecking=no \
-        -o UserKnownHostsFile=/dev/null \
-        -o ConnectTimeout=10 \
-        -o ConnectionAttempts=1 \
-        -o LogLevel=ERROR \
-        127.0.0.1 exit 2>&1)
-    
-    # "Permission denied" significa que la conexión SSH llegó correctamente
-    # Cualquier otro error (timeout, connection refused, etc.) indica problema
-    if echo "$output" | grep -q "Permission denied"; then
-        return 0  # Túnel OK
-    else
-        return 1  # Túnel caído
-    fi
-}
-
 # === MENÚ CON FLECHAS ===
 
 SELECCION_GLOBAL=""
@@ -291,7 +263,7 @@ fi
 
 clear
 echo "========================================="
-echo "   SLIPSTREAM AUTO-RESTART v1.0"
+echo "   SLIPSTREAM AUTO-RESTART v0.5"
 echo "========================================="
 echo ""
 echo "Configuración:"
@@ -306,21 +278,19 @@ fi
 echo "========================================="
 echo ""
 
-# ================== PARÁMETROS DE MONITOREO ==================
-CHECK_EVERY=2              # Revisar proceso cada 2 segundos
-RETRY_DELAY=3              # Espera antes de relanzar si se cayó
-HEALTH_CHECK_INTERVAL=15   # Verificar salud del túnel cada 15 segundos
-HEALTH_CHECK_DELAY=8       # Esperar 8s después de iniciar antes de primera verificación
-# =============================================================
-
-contador_health=0
+# ================== CAMBIO: RECONEXIÓN SI MUERE ==================
+# Mantiene los reinicios en los tiempos exactos, pero si el proceso se cae antes,
+# lo relanza sin esperar al reinicio programado.
+CHECK_EVERY=2       # cada cuántos segundos revisar si sigue vivo
+RETRY_DELAY=2       # espera antes de relanzar si se cayó
+# ================================================================
 
 while true; do
     espera=$(calcular_espera)
     end_ts=$(( $(date +%s) + espera ))
 
     echo "[$(date '+%H:%M:%S')] Iniciando slipstream-client..."
-    echo "[$(date '+%H:%M:%S')] Próximo reinicio programado en ${espera}s (~$((espera/60))min)"
+    echo "[$(date '+%H:%M:%S')] Próximo reinicio en ${espera}s (~$((espera/60))min)"
     echo ""
 
     ./slipstream-client \
@@ -330,59 +300,28 @@ while true; do
         --keep-alive-interval=120 \
         --congestion-control=cubic &
     PID=$!
-    
-    contador_health=0
-    primera_verificacion=true
 
-    # Vigilar el proceso hasta el próximo reinicio programado
+    # En vez de sleep "$espera", vigilamos el PID y si muere lo relanzamos
     while [ "$(date +%s)" -lt "$end_ts" ]; do
-        # 1. Verificar si el proceso murió
         if ! kill -0 "$PID" 2>/dev/null; then
             echo ""
-            echo "[$(date '+%H:%M:%S')] ${AMARILLO}Proceso murió. Reconectando...${NC}"
+            echo "[$(date '+%H:%M:%S')] slipstream-client se cayó. Reconectando..."
             sleep "$RETRY_DELAY"
-            break  # Salir del while interno para reiniciar
+
+            ./slipstream-client \
+                --tcp-listen-port=5201 \
+                --resolver="${IP}:53" \
+                --domain="${DOMAIN}" \
+                --keep-alive-interval=120 \
+                --congestion-control=cubic &
+            PID=$!
+        else
+            sleep "$CHECK_EVERY"
         fi
-        
-        # 2. Verificar salud del túnel SSH
-        contador_health=$((contador_health + CHECK_EVERY))
-        
-        # Esperar un poco después del inicio antes de la primera verificación
-        if [ "$primera_verificacion" = true ]; then
-            if [ "$contador_health" -ge "$HEALTH_CHECK_DELAY" ]; then
-                primera_verificacion=false
-                if ! verificar_tunel; then
-                    echo ""
-                    echo "[$(date '+%H:%M:%S')] ${ROJO}Túnel no responde. Reconectando...${NC}"
-                    kill "$PID" 2>/dev/null
-                    wait "$PID" 2>/dev/null
-                    sleep "$RETRY_DELAY"
-                    break
-                else
-                    echo "[$(date '+%H:%M:%S')] ${VERDE}Túnel verificado OK${NC}"
-                fi
-                contador_health=0
-            fi
-        elif [ "$contador_health" -ge "$HEALTH_CHECK_INTERVAL" ]; then
-            if ! verificar_tunel; then
-                echo ""
-                echo "[$(date '+%H:%M:%S')] ${ROJO}Túnel no responde. Reconectando...${NC}"
-                kill "$PID" 2>/dev/null
-                wait "$PID" 2>/dev/null
-                sleep "$RETRY_DELAY"
-                break
-            else
-                echo "[$(date '+%H:%M:%S')] ${VERDE}Túnel OK${NC}"
-            fi
-            contador_health=0
-        fi
-        
-        sleep "$CHECK_EVERY"
     done
 
-    # Reinicio programado
     echo ""
-    echo "[$(date '+%H:%M:%S')] Reinicio programado..."
+    echo "[$(date '+%H:%M:%S')] Reiniciando slipstream-client..."
     if kill -0 "$PID" 2>/dev/null; then
         kill "$PID" 2>/dev/null
         wait "$PID" 2>/dev/null

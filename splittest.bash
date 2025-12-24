@@ -235,6 +235,8 @@ cleanup() {
         kill "$PID" 2>/dev/null
         wait "$PID" 2>/dev/null
     fi
+    # Matar cualquier proceso slipstream-client huérfano
+    pkill -f "slipstream-client" 2>/dev/null
     rm -f "$TIMESTAMP_FILE" 2>/dev/null
     termux-wake-unlock 2>/dev/null
     echo "[$(date '+%H:%M:%S')] Terminado."
@@ -308,14 +310,34 @@ check_raw_bytes() {
     return 0
 }
 
-while true; do
-    espera=$(calcular_espera)
-    end_ts=$(( $(date +%s) + espera ))
+# Función para detener slipstream completamente
+stop_slipstream() {
+    # Matar el monitor
+    if [ -n "$MONITOR_PID" ] && kill -0 "$MONITOR_PID" 2>/dev/null; then
+        kill "$MONITOR_PID" 2>/dev/null
+        wait "$MONITOR_PID" 2>/dev/null
+    fi
+    
+    # Matar el proceso slipstream-client directamente
+    if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+        kill "$PID" 2>/dev/null
+        wait "$PID" 2>/dev/null
+    fi
+    
+    # Forzar limpieza de cualquier proceso residual
+    pkill -f "slipstream-client.*--tcp-listen-port=5201" 2>/dev/null
+    
+    # Esperar un momento para asegurar que todo se ha detenido
+    sleep 1
+    
+    MONITOR_PID=""
+    PID=""
+}
 
+# Función para iniciar slipstream
+start_slipstream() {
     echo "[$(date '+%H:%M:%S')] Iniciando slipstream-client..."
-    echo "[$(date '+%H:%M:%S')] Próximo reinicio en ${espera}s (~$((espera/60))min)"
-    echo ""
-
+    
     # Resetear timestamp
     echo $(date +%s) > "$TIMESTAMP_FILE"
 
@@ -335,8 +357,20 @@ while true; do
     MONITOR_PID=$!
     
     # Obtener el PID real de slipstream-client
-    sleep 0.5
+    sleep 1
     PID=$(pgrep -P $MONITOR_PID slipstream-client 2>/dev/null)
+    
+    echo "[$(date '+%H:%M:%S')] slipstream-client iniciado (Monitor PID: $MONITOR_PID, Cliente PID: $PID)"
+}
+
+while true; do
+    espera=$(calcular_espera)
+    end_ts=$(( $(date +%s) + espera ))
+
+    echo "[$(date '+%H:%M:%S')] Próximo reinicio programado en ${espera}s (~$((espera/60))min)"
+    echo ""
+
+    start_slipstream
 
     # Monitoreo continuo
     while [ "$(date +%s)" -lt "$end_ts" ]; do
@@ -344,55 +378,19 @@ while true; do
         if ! kill -0 "$MONITOR_PID" 2>/dev/null; then
             echo ""
             echo "[$(date '+%H:%M:%S')] slipstream-client se cayó. Reconectando..."
+            
+            stop_slipstream
             sleep "$RETRY_DELAY"
-            
-            echo $(date +%s) > "$TIMESTAMP_FILE"
-            
-            ./slipstream-client \
-                --tcp-listen-port=5201 \
-                --resolver="${IP}:53" \
-                --domain="${DOMAIN}" \
-                --keep-alive-interval=120 \
-                --congestion-control=cubic 2>&1 | while IFS= read -r line; do
-                    echo "$line"
-                    if echo "$line" | grep -q "raw bytes"; then
-                        echo $(date +%s) > "$TIMESTAMP_FILE"
-                    fi
-                done &
-            
-            MONITOR_PID=$!
-            sleep 0.5
-            PID=$(pgrep -P $MONITOR_PID slipstream-client 2>/dev/null)
+            start_slipstream
         
         # Verificar si hay actividad (raw bytes)
         elif ! check_raw_bytes; then
             echo ""
             echo "[$(date '+%H:%M:%S')] Sin actividad (raw bytes) por ${RAW_BYTES_TIMEOUT}s. Reconectando..."
             
-            if [ -n "$MONITOR_PID" ] && kill -0 "$MONITOR_PID" 2>/dev/null; then
-                kill "$MONITOR_PID" 2>/dev/null
-                wait "$MONITOR_PID" 2>/dev/null
-            fi
-            
+            stop_slipstream
             sleep "$RETRY_DELAY"
-            
-            echo $(date +%s) > "$TIMESTAMP_FILE"
-            
-            ./slipstream-client \
-                --tcp-listen-port=5201 \
-                --resolver="${IP}:53" \
-                --domain="${DOMAIN}" \
-                --keep-alive-interval=120 \
-                --congestion-control=cubic 2>&1 | while IFS= read -r line; do
-                    echo "$line"
-                    if echo "$line" | grep -q "raw bytes"; then
-                        echo $(date +%s) > "$TIMESTAMP_FILE"
-                    fi
-                done &
-            
-            MONITOR_PID=$!
-            sleep 0.5
-            PID=$(pgrep -P $MONITOR_PID slipstream-client 2>/dev/null)
+            start_slipstream
         
         else
             sleep "$CHECK_EVERY"
@@ -400,9 +398,7 @@ while true; do
     done
 
     echo ""
-    echo "[$(date '+%H:%M:%S')] Reiniciando slipstream-client..."
-    if [ -n "$MONITOR_PID" ] && kill -0 "$MONITOR_PID" 2>/dev/null; then
-        kill "$MONITOR_PID" 2>/dev/null
-        wait "$MONITOR_PID" 2>/dev/null
-    fi
+    echo "[$(date '+%H:%M:%S')] Reinicio programado ejecutándose..."
+    stop_slipstream
+    sleep 1
 done

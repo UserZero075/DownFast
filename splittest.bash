@@ -51,38 +51,14 @@ while [[ $# -gt 0 ]]; do
             MODO_AUTO=true
             shift
             ;;
-        -D1)
-            IP="$D1"
-            shift
-            ;;
-        -D2)
-            IP="$D2"
-            shift
-            ;;
-        -D3)
-            IP="$D3"
-            shift
-            ;;
-        -D4)
-            IP="$D4"
-            shift
-            ;;
-        -W1)
-            IP="$W1"
-            shift
-            ;;
-        -W2)
-            IP="$W2"
-            shift
-            ;;
-        -W3)
-            IP="$W3"
-            shift
-            ;;
-        -W4)
-            IP="$W4"
-            shift
-            ;;
+        -D1) IP="$D1"; shift ;;
+        -D2) IP="$D2"; shift ;;
+        -D3) IP="$D3"; shift ;;
+        -D4) IP="$D4"; shift ;;
+        -W1) IP="$W1"; shift ;;
+        -W2) IP="$W2"; shift ;;
+        -W3) IP="$W3"; shift ;;
+        -W4) IP="$W4"; shift ;;
         *)
             echo -e "${ROJO}Flag desconocido: $1${NC}"
             echo ""
@@ -222,25 +198,24 @@ calcular_espera() {
 
 PID=""
 
-# ================== CAMBIO: RECONEXIÓN SI MUERE ==================
-CHECK_EVERY=2       # cada cuántos segundos revisar si sigue vivo
-RETRY_DELAY=2       # espera antes de relanzar si se cayó
-# ================================================================
+# ================== RECONEXIÓN SI MUERE ==================
+CHECK_EVERY=2
+RETRY_DELAY=2
+# =========================================================
 
-# ================== RAWBYTES WATCHDOG (15s) ======================
+# ================== RAWBYTES WATCHDOG ====================
 RAW_TIMEOUT=15
 RAW_CHECK_EVERY=1
 
-# Termux OK: usar TMPDIR
 TMPBASE="${TMPDIR:-/data/data/com.termux/files/usr/tmp}"
 mkdir -p "$TMPBASE" 2>/dev/null
 
 LAST_RAW_FILE="$TMPBASE/slip_last_raw.$$"
-FIFO_LOG="$TMPBASE/slip_fifo.$$"
+RAW_LOG_FILE="$TMPBASE/slip_rawlog.$$"
 
 TEE_PID=""
-READER_PID=""
-# ================================================================
+TAIL_PID=""
+# =========================================================
 
 cleanup() {
     echo ""
@@ -250,10 +225,9 @@ cleanup() {
         wait "$PID" 2>/dev/null
     fi
 
-    [ -n "$READER_PID" ] && kill "$READER_PID" 2>/dev/null
+    [ -n "$TAIL_PID" ] && kill "$TAIL_PID" 2>/dev/null
     [ -n "$TEE_PID" ] && kill "$TEE_PID" 2>/dev/null
-    [ -p "$FIFO_LOG" ] && rm -f "$FIFO_LOG" 2>/dev/null
-    [ -f "$LAST_RAW_FILE" ] && rm -f "$LAST_RAW_FILE" 2>/dev/null
+    rm -f "$LAST_RAW_FILE" "$RAW_LOG_FILE" 2>/dev/null
 
     termux-wake-unlock 2>/dev/null
     echo "[$(date '+%H:%M:%S')] Terminado."
@@ -289,7 +263,7 @@ fi
 
 clear
 echo "========================================="
-echo "   SLIPSTREAM AUTO-RESTART v0.6"
+echo "   SLIPSTREAM AUTO-RESTART v0.5"
 echo "========================================="
 echo ""
 echo "Configuración:"
@@ -312,79 +286,75 @@ while true; do
     echo "[$(date '+%H:%M:%S')] Próximo reinicio en ${espera}s (~$((espera/60))min)"
     echo ""
 
-    # ===== Lanzamiento con captura de raw bytes =====
-    rm -f "$FIFO_LOG" "$LAST_RAW_FILE" 2>/dev/null
-    mkfifo "$FIFO_LOG" || {
-        echo "[$(date '+%H:%M:%S')] ERROR: No pude crear FIFO en $FIFO_LOG"
-        sleep 2
-        continue
-    }
-    date +%s > "$LAST_RAW_FILE" 2>/dev/null
+    # Inicializar watchdog de raw bytes
+    rm -f "$LAST_RAW_FILE" "$RAW_LOG_FILE" 2>/dev/null
+    : > "$RAW_LOG_FILE"
+    date +%s > "$LAST_RAW_FILE"
 
-    tee < "$FIFO_LOG" &
-    TEE_PID=$!
-
+    # Tail que observa el archivo y actualiza timestamp al ver "raw bytes:"
     (
-        while IFS= read -r line; do
+        tail -n 0 -F "$RAW_LOG_FILE" 2>/dev/null | while IFS= read -r line; do
             case "$line" in
                 *"raw bytes:"*)
                     date +%s > "$LAST_RAW_FILE" 2>/dev/null
                     ;;
             esac
         done
-    ) < "$FIFO_LOG" &
-    READER_PID=$!
+    ) &
+    TAIL_PID=$!
 
+    # Ejecutar cliente: MOSTRAR EN PANTALLA + guardar log para el watchdog
+    # Esto preserva el "log nativo" porque sale tal cual en stdout/stderr.
     ./slipstream-client \
         --tcp-listen-port=5201 \
         --resolver="${IP}:53" \
         --domain="${DOMAIN}" \
         --keep-alive-interval=120 \
         --congestion-control=cubic \
-        > "$FIFO_LOG" 2>&1 &
-    PID=$!
-    # ===============================================
+        2>&1 | tee -a "$RAW_LOG_FILE" &
+    TEE_PID=$!
+
+    # PID real del slipstream-client (proceso hijo del pipeline)
+    PID=$(pgrep -n -f "./slipstream-client.*--tcp-listen-port=5201.*--resolver=${IP}:53.*--domain=${DOMAIN}" 2>/dev/null)
+
+    # Si por alguna razón no se detecta, usa el PID del pipeline como fallback
+    [ -z "$PID" ] && PID="$TEE_PID"
 
     while [ "$(date +%s)" -lt "$end_ts" ]; do
+        # 1) Si el proceso muere
         if ! kill -0 "$PID" 2>/dev/null; then
             echo ""
             echo "[$(date '+%H:%M:%S')] slipstream-client se cayó. Reconectando..."
-
-            kill "$READER_PID" 2>/dev/null
+            kill "$TAIL_PID" 2>/dev/null
             kill "$TEE_PID" 2>/dev/null
-            rm -f "$FIFO_LOG" "$LAST_RAW_FILE" 2>/dev/null
-
+            rm -f "$LAST_RAW_FILE" "$RAW_LOG_FILE" 2>/dev/null
             sleep "$RETRY_DELAY"
             break
-        else
-            now=$(date +%s)
-            last=$(cat "$LAST_RAW_FILE" 2>/dev/null || echo 0)
-            if [ $((now - last)) -gt "$RAW_TIMEOUT" ]; then
-                echo ""
-                echo "[$(date '+%H:%M:%S')] Sin raw bytes hace $((now-last))s (> ${RAW_TIMEOUT}s). Reiniciando..."
-
-                kill "$PID" 2>/dev/null
-                wait "$PID" 2>/dev/null
-
-                kill "$READER_PID" 2>/dev/null
-                kill "$TEE_PID" 2>/dev/null
-                rm -f "$FIFO_LOG" "$LAST_RAW_FILE" 2>/dev/null
-
-                break
-            fi
-
-            sleep "$RAW_CHECK_EVERY"
         fi
+
+        # 2) Si se queda vivo pero sin raw bytes > 15s
+        now=$(date +%s)
+        last=$(cat "$LAST_RAW_FILE" 2>/dev/null || echo 0)
+        if [ $((now - last)) -gt "$RAW_TIMEOUT" ]; then
+            echo ""
+            echo "[$(date '+%H:%M:%S')] Sin raw bytes hace $((now-last))s (> ${RAW_TIMEOUT}s). Reiniciando..."
+
+            kill "$PID" 2>/dev/null
+            wait "$PID" 2>/dev/null
+
+            kill "$TAIL_PID" 2>/dev/null
+            kill "$TEE_PID" 2>/dev/null
+            rm -f "$LAST_RAW_FILE" "$RAW_LOG_FILE" 2>/dev/null
+            break
+        fi
+
+        sleep "$RAW_CHECK_EVERY"
     done
 
     echo ""
     echo "[$(date '+%H:%M:%S')] Reiniciando slipstream-client..."
-    if kill -0 "$PID" 2>/dev/null; then
-        kill "$PID" 2>/dev/null
-        wait "$PID" 2>/dev/null
-    fi
-
-    kill "$READER_PID" 2>/dev/null
+    kill "$PID" 2>/dev/null
+    kill "$TAIL_PID" 2>/dev/null
     kill "$TEE_PID" 2>/dev/null
-    rm -f "$FIFO_LOG" "$LAST_RAW_FILE" 2>/dev/null
+    rm -f "$LAST_RAW_FILE" "$RAW_LOG_FILE" 2>/dev/null
 done

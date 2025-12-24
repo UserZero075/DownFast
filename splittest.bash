@@ -265,7 +265,7 @@ fi
 
 clear
 echo "========================================="
-echo "   SLIPSTREAM AUTO-RESTART v0.6"
+echo "   SLIPSTREAM AUTO-RESTART v0.7"
 echo "========================================="
 echo ""
 echo "Configuración:"

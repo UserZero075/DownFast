@@ -231,8 +231,8 @@ RETRY_DELAY=2       # espera antes de relanzar si se cayó
 RAW_TIMEOUT=15
 RAW_CHECK_EVERY=1
 
-# FIX TERMUX: no usar /tmp (puede no ser escribible)
-TMPBASE="${TMPDIR:-$HOME/.cache}"
+# Termux OK: usar TMPDIR
+TMPBASE="${TMPDIR:-/data/data/com.termux/files/usr/tmp}"
 mkdir -p "$TMPBASE" 2>/dev/null
 
 LAST_RAW_FILE="$TMPBASE/slip_last_raw.$$"

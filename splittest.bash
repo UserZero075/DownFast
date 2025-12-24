@@ -222,6 +222,26 @@ calcular_espera() {
 
 PID=""
 
+# ================== CAMBIO: RECONEXIÓN SI MUERE ==================
+CHECK_EVERY=2       # cada cuántos segundos revisar si sigue vivo
+RETRY_DELAY=2       # espera antes de relanzar si se cayó
+# ================================================================
+
+# ================== RAWBYTES WATCHDOG (15s) ======================
+RAW_TIMEOUT=15
+RAW_CHECK_EVERY=1
+
+# FIX TERMUX: no usar /tmp (puede no ser escribible)
+TMPBASE="${TMPDIR:-$HOME/.cache}"
+mkdir -p "$TMPBASE" 2>/dev/null
+
+LAST_RAW_FILE="$TMPBASE/slip_last_raw.$$"
+FIFO_LOG="$TMPBASE/slip_fifo.$$"
+
+TEE_PID=""
+READER_PID=""
+# ================================================================
+
 cleanup() {
     echo ""
     echo "[$(date '+%H:%M:%S')] Deteniendo..."
@@ -230,12 +250,10 @@ cleanup() {
         wait "$PID" 2>/dev/null
     fi
 
-    # === RAWBYTES WATCHDOG CLEANUP ===
     [ -n "$READER_PID" ] && kill "$READER_PID" 2>/dev/null
     [ -n "$TEE_PID" ] && kill "$TEE_PID" 2>/dev/null
     [ -p "$FIFO_LOG" ] && rm -f "$FIFO_LOG" 2>/dev/null
     [ -f "$LAST_RAW_FILE" ] && rm -f "$LAST_RAW_FILE" 2>/dev/null
-    # ================================
 
     termux-wake-unlock 2>/dev/null
     echo "[$(date '+%H:%M:%S')] Terminado."
@@ -286,20 +304,6 @@ fi
 echo "========================================="
 echo ""
 
-# ================== CAMBIO: RECONEXIÓN SI MUERE ==================
-CHECK_EVERY=2       # cada cuántos segundos revisar si sigue vivo
-RETRY_DELAY=2       # espera antes de relanzar si se cayó
-# ================================================================
-
-# ================== RAWBYTES WATCHDOG (15s) ======================
-RAW_TIMEOUT=15
-RAW_CHECK_EVERY=1
-LAST_RAW_FILE="/tmp/slip_last_raw.$$"
-FIFO_LOG="/tmp/slip_fifo.$$"
-TEE_PID=""
-READER_PID=""
-# ================================================================
-
 while true; do
     espera=$(calcular_espera)
     end_ts=$(( $(date +%s) + espera ))
@@ -310,8 +314,12 @@ while true; do
 
     # ===== Lanzamiento con captura de raw bytes =====
     rm -f "$FIFO_LOG" "$LAST_RAW_FILE" 2>/dev/null
-    mkfifo "$FIFO_LOG"
-    date +%s > "$LAST_RAW_FILE"
+    mkfifo "$FIFO_LOG" || {
+        echo "[$(date '+%H:%M:%S')] ERROR: No pude crear FIFO en $FIFO_LOG"
+        sleep 2
+        continue
+    }
+    date +%s > "$LAST_RAW_FILE" 2>/dev/null
 
     tee < "$FIFO_LOG" &
     TEE_PID=$!
@@ -320,7 +328,7 @@ while true; do
         while IFS= read -r line; do
             case "$line" in
                 *"raw bytes:"*)
-                    date +%s > "$LAST_RAW_FILE"
+                    date +%s > "$LAST_RAW_FILE" 2>/dev/null
                     ;;
             esac
         done
@@ -342,17 +350,13 @@ while true; do
             echo ""
             echo "[$(date '+%H:%M:%S')] slipstream-client se cayó. Reconectando..."
 
-            # limpiar watcher
             kill "$READER_PID" 2>/dev/null
             kill "$TEE_PID" 2>/dev/null
             rm -f "$FIFO_LOG" "$LAST_RAW_FILE" 2>/dev/null
 
             sleep "$RETRY_DELAY"
-
-            # relanzar inmediatamente: rompemos para que el while true reinicie ya mismo
             break
         else
-            # ===== Detectar 15s sin raw bytes =====
             now=$(date +%s)
             last=$(cat "$LAST_RAW_FILE" 2>/dev/null || echo 0)
             if [ $((now - last)) -gt "$RAW_TIMEOUT" ]; then
@@ -366,10 +370,8 @@ while true; do
                 kill "$TEE_PID" 2>/dev/null
                 rm -f "$FIFO_LOG" "$LAST_RAW_FILE" 2>/dev/null
 
-                # salir del while interno para relanzar
                 break
             fi
-            # =====================================
 
             sleep "$RAW_CHECK_EVERY"
         fi
@@ -382,7 +384,6 @@ while true; do
         wait "$PID" 2>/dev/null
     fi
 
-    # limpiar watcher al final del ciclo
     kill "$READER_PID" 2>/dev/null
     kill "$TEE_PID" 2>/dev/null
     rm -f "$FIFO_LOG" "$LAST_RAW_FILE" 2>/dev/null

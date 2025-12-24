@@ -221,7 +221,7 @@ calcular_espera() {
 }
 
 PID=""
-LOG_FILE="/tmp/slipstream_$$.log"
+LOG_FILE="$HOME/.slipstream_$$.log"
 
 cleanup() {
     echo ""

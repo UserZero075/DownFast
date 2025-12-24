@@ -291,7 +291,7 @@ fi
 
 clear
 echo "========================================="
-echo "   SLIPSTREAM AUTO-RESTART v0.9"
+echo "   SLIPSTREAM AUTO-RESTART v1.0"
 echo "========================================="
 echo ""
 echo "Configuración:"
@@ -311,11 +311,9 @@ CHECK_EVERY=2              # Revisar proceso cada 2 segundos
 RETRY_DELAY=3              # Espera antes de relanzar si se cayó
 HEALTH_CHECK_INTERVAL=15   # Verificar salud del túnel cada 15 segundos
 HEALTH_CHECK_DELAY=8       # Esperar 8s después de iniciar antes de primera verificación
-MAX_FALLOS_CONSECUTIVOS=2  # Requiere 2 fallos consecutivos antes de reiniciar
 # =============================================================
 
 contador_health=0
-fallos_consecutivos=0
 
 while true; do
     espera=$(calcular_espera)
@@ -334,7 +332,6 @@ while true; do
     PID=$!
     
     contador_health=0
-    fallos_consecutivos=0
     primera_verificacion=true
 
     # Vigilar el proceso hasta el próximo reinicio programado
@@ -355,35 +352,27 @@ while true; do
             if [ "$contador_health" -ge "$HEALTH_CHECK_DELAY" ]; then
                 primera_verificacion=false
                 if ! verificar_tunel; then
-                    fallos_consecutivos=$((fallos_consecutivos + 1))
-                    echo "[$(date '+%H:%M:%S')] ${AMARILLO}Túnel no responde (intento 1/$MAX_FALLOS_CONSECUTIVOS)${NC}"
+                    echo ""
+                    echo "[$(date '+%H:%M:%S')] ${ROJO}Túnel no responde. Reconectando...${NC}"
+                    kill "$PID" 2>/dev/null
+                    wait "$PID" 2>/dev/null
+                    sleep "$RETRY_DELAY"
+                    break
                 else
                     echo "[$(date '+%H:%M:%S')] ${VERDE}Túnel verificado OK${NC}"
-                    fallos_consecutivos=0
                 fi
                 contador_health=0
             fi
         elif [ "$contador_health" -ge "$HEALTH_CHECK_INTERVAL" ]; then
             if ! verificar_tunel; then
-                fallos_consecutivos=$((fallos_consecutivos + 1))
-                echo "[$(date '+%H:%M:%S')] ${AMARILLO}Túnel no responde ($fallos_consecutivos/$MAX_FALLOS_CONSECUTIVOS)${NC}"
-                
-                # Solo reiniciar si alcanzamos el máximo de fallos consecutivos
-                if [ "$fallos_consecutivos" -ge "$MAX_FALLOS_CONSECUTIVOS" ]; then
-                    echo ""
-                    echo "[$(date '+%H:%M:%S')] ${ROJO}Túnel caído ($fallos_consecutivos fallos). Reconectando...${NC}"
-                    kill "$PID" 2>/dev/null
-                    wait "$PID" 2>/dev/null
-                    sleep "$RETRY_DELAY"
-                    break
-                fi
+                echo ""
+                echo "[$(date '+%H:%M:%S')] ${ROJO}Túnel no responde. Reconectando...${NC}"
+                kill "$PID" 2>/dev/null
+                wait "$PID" 2>/dev/null
+                sleep "$RETRY_DELAY"
+                break
             else
-                if [ "$fallos_consecutivos" -gt 0 ]; then
-                    echo "[$(date '+%H:%M:%S')] ${VERDE}Túnel recuperado OK${NC}"
-                else
-                    echo "[$(date '+%H:%M:%S')] ${VERDE}Túnel OK${NC}"
-                fi
-                fallos_consecutivos=0
+                echo "[$(date '+%H:%M:%S')] ${VERDE}Túnel OK${NC}"
             fi
             contador_health=0
         fi

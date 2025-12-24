@@ -14,13 +14,6 @@ W2='181.225.233.40'
 W3='181.225.233.110'
 W4='181.225.233.120'
 
-# === CONFIGURACIÓN TERMUX ===
-TMPDIR="${TMPDIR:-/data/data/com.termux/files/usr/tmp}"
-mkdir -p "$TMPDIR" 2>/dev/null
-
-LOG_FILE="${TMPDIR}/slipstream.log"
-TRAFFIC_FILE="${TMPDIR}/slipstream_last_traffic"
-
 # === FORZAR INSTALACIÓN NO INTERACTIVA ===
 export DEBIAN_FRONTEND=noninteractive
 
@@ -228,68 +221,22 @@ calcular_espera() {
 }
 
 PID=""
-PID_MONITOR=""
+LOG_FILE="/tmp/slipstream_$$.log"
 
 cleanup() {
     echo ""
     echo "[$(date '+%H:%M:%S')] Deteniendo..."
-    
     if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
         kill "$PID" 2>/dev/null
         wait "$PID" 2>/dev/null
     fi
-    
-    if [ -n "$PID_MONITOR" ] && kill -0 "$PID_MONITOR" 2>/dev/null; then
-        kill "$PID_MONITOR" 2>/dev/null
-        wait "$PID_MONITOR" 2>/dev/null
-    fi
-    
-    rm -f "$LOG_FILE" "$TRAFFIC_FILE" 2>/dev/null
-    
+    rm -f "$LOG_FILE" 2>/dev/null
     termux-wake-unlock 2>/dev/null
     echo "[$(date '+%H:%M:%S')] Terminado."
     exit 0
 }
 
 trap cleanup SIGINT SIGTERM
-
-# === MONITOR DE LOGS SIMPLIFICADO ===
-monitorear_logs() {
-    local logfile="$1"
-    
-    > "$logfile"
-    
-    tail -F "$logfile" 2>/dev/null | while IFS= read -r linea; do
-        echo "$linea"
-        
-        # Solo detectar raw bytes (tráfico real)
-        if echo "$linea" | grep -q "raw bytes:"; then
-            date +%s > "$TRAFFIC_FILE"
-        fi
-    done &
-    
-    PID_MONITOR=$!
-}
-
-# === VERIFICACIÓN SIMPLIFICADA ===
-verificar_trafico() {
-    # Verificar que haya habido raw bytes en los últimos 10 segundos
-    if [ -f "$TRAFFIC_FILE" ]; then
-        local last_traffic=$(cat "$TRAFFIC_FILE")
-        local now=$(date +%s)
-        local diff=$((now - last_traffic))
-        
-        if [ "$diff" -gt 10 ]; then
-            echo "[$(date '+%H:%M:%S')] ⚠️ Sin tráfico (raw bytes) desde hace ${diff}s"
-            return 1
-        fi
-    else
-        # Si nunca ha habido tráfico, dar 15 segundos de gracia al inicio
-        return 0
-    fi
-    
-    return 0
-}
 
 # === SELECCIÓN ===
 
@@ -318,7 +265,7 @@ fi
 
 clear
 echo "========================================="
-echo "   SLIPSTREAM AUTO-RESTART v1.0"
+echo "   SLIPSTREAM AUTO-RESTART v0.6"
 echo "========================================="
 echo ""
 echo "Configuración:"
@@ -326,109 +273,106 @@ echo -e "  ${CYAN}Región:${NC}   $REGION"
 echo -e "  ${CYAN}Dominio:${NC}  $DOMAIN"
 echo -e "  ${CYAN}Resolver:${NC} $IP"
 if [ "$MODO_AUTO" = true ]; then
-    echo -e "  ${AMARILLO}Modo:${NC}     Automático"
+    echo -e "  ${AMARILLO}Modo:${NC}     Automático (sin menú)"
 else
     echo -e "  ${VERDE}Modo:${NC}     Interactivo"
 fi
-echo ""
-echo "Detección:"
-echo -e "  ${CYAN}•${NC} Sin raw bytes >10s = Reconexión"
-echo -e "  ${CYAN}•${NC} Reinicio programado cada 5 min"
 echo "========================================="
 echo ""
 
-# === PARÁMETROS ===
-CHECK_EVERY=3
-RETRY_DELAY=2
+# ================== CONFIGURACIÓN DE MONITOREO ==================
+CHECK_EVERY=2           # revisar proceso cada 2 segundos
+RETRY_DELAY=2           # espera antes de relanzar
+RAW_BYTES_TIMEOUT=15    # segundos sin "raw bytes" antes de reconectar
+# ================================================================
 
-# === BUCLE PRINCIPAL ===
+# Función para verificar actividad de raw bytes
+check_raw_bytes() {
+    local now=$(date +%s)
+    local elapsed=$((now - LAST_RAW_BYTES_TIME))
+    
+    # Buscar "raw bytes" en las últimas líneas del log
+    if tail -n 100 "$LOG_FILE" 2>/dev/null | grep -q "raw bytes"; then
+        LAST_RAW_BYTES_TIME=$now
+        return 0
+    fi
+    
+    # Si pasaron más de RAW_BYTES_TIMEOUT segundos sin raw bytes
+    if [ $elapsed -ge $RAW_BYTES_TIMEOUT ]; then
+        return 1
+    fi
+    
+    return 0
+}
 
 while true; do
     espera=$(calcular_espera)
     end_ts=$(( $(date +%s) + espera ))
+    LAST_RAW_BYTES_TIME=$(date +%s)  # Reset al iniciar
 
-    echo "[$(date '+%H:%M:%S')] 🚀 Iniciando slipstream-client..."
-    echo "[$(date '+%H:%M:%S')] ⏰ Próximo reinicio en ${espera}s (~$((espera/60))min)"
+    echo "[$(date '+%H:%M:%S')] Iniciando slipstream-client..."
+    echo "[$(date '+%H:%M:%S')] Próximo reinicio en ${espera}s (~$((espera/60))min)"
     echo ""
 
-    # Limpiar marcador de tráfico
-    rm -f "$TRAFFIC_FILE"
-    
-    # Iniciar monitor
-    monitorear_logs "$LOG_FILE"
-    
-    # Dar 5 segundos antes de iniciar verificaciones (para que establezca conexión)
-    sleep 5
-    
-    # Marcar inicio para evitar falso positivo inicial
-    date +%s > "$TRAFFIC_FILE"
-    
-    # Lanzar slipstream
+    # Limpiar log anterior
+    > "$LOG_FILE"
+
+    # Iniciar slipstream redirigiendo salida al log
     ./slipstream-client \
         --tcp-listen-port=5201 \
         --resolver="${IP}:53" \
         --domain="${DOMAIN}" \
         --keep-alive-interval=120 \
-        --congestion-control=cubic 2>&1 | tee -a "$LOG_FILE" &
+        --congestion-control=cubic > "$LOG_FILE" 2>&1 &
     PID=$!
 
-    # Bucle de vigilancia
+    # Monitoreo continuo
     while [ "$(date +%s)" -lt "$end_ts" ]; do
-        if ! verificar_trafico; then
+        # Verificar si el proceso murió
+        if ! kill -0 "$PID" 2>/dev/null; then
             echo ""
-            echo "[$(date '+%H:%M:%S')] 🔄 Conexión muerta. Reiniciando..."
-            
-            if kill -0 "$PID" 2>/dev/null; then
-                kill "$PID" 2>/dev/null
-                wait "$PID" 2>/dev/null
-            fi
-            
-            if [ -n "$PID_MONITOR" ] && kill -0 "$PID_MONITOR" 2>/dev/null; then
-                kill "$PID_MONITOR" 2>/dev/null
-                wait "$PID_MONITOR" 2>/dev/null
-            fi
-            
+            echo "[$(date '+%H:%M:%S')] slipstream-client se cayó. Reconectando..."
             sleep "$RETRY_DELAY"
             
-            # Reiniciar
-            rm -f "$TRAFFIC_FILE"
-            monitorear_logs "$LOG_FILE"
-            
-            sleep 5
-            date +%s > "$TRAFFIC_FILE"
+            > "$LOG_FILE"
+            LAST_RAW_BYTES_TIME=$(date +%s)
             
             ./slipstream-client \
                 --tcp-listen-port=5201 \
                 --resolver="${IP}:53" \
                 --domain="${DOMAIN}" \
                 --keep-alive-interval=120 \
-                --congestion-control=cubic 2>&1 | tee -a "$LOG_FILE" &
+                --congestion-control=cubic > "$LOG_FILE" 2>&1 &
             PID=$!
-            
-            echo "[$(date '+%H:%M:%S')] ✓ Reconexión completada"
-            echo ""
-            
-            # Recalcular tiempo de espera
-            espera=$(calcular_espera)
-            end_ts=$(( $(date +%s) + espera ))
-        fi
         
-        sleep "$CHECK_EVERY"
+        # Verificar si hay actividad (raw bytes)
+        elif ! check_raw_bytes; then
+            echo ""
+            echo "[$(date '+%H:%M:%S')] Sin actividad (raw bytes) por ${RAW_BYTES_TIMEOUT}s. Reconectando..."
+            kill "$PID" 2>/dev/null
+            wait "$PID" 2>/dev/null
+            sleep "$RETRY_DELAY"
+            
+            > "$LOG_FILE"
+            LAST_RAW_BYTES_TIME=$(date +%s)
+            
+            ./slipstream-client \
+                --tcp-listen-port=5201 \
+                --resolver="${IP}:53" \
+                --domain="${DOMAIN}" \
+                --keep-alive-interval=120 \
+                --congestion-control=cubic > "$LOG_FILE" 2>&1 &
+            PID=$!
+        
+        else
+            sleep "$CHECK_EVERY"
+        fi
     done
 
-    # Reinicio programado
     echo ""
-    echo "[$(date '+%H:%M:%S')] ⏰ Reinicio programado (cada 5 min)..."
-    
+    echo "[$(date '+%H:%M:%S')] Reiniciando slipstream-client..."
     if kill -0 "$PID" 2>/dev/null; then
         kill "$PID" 2>/dev/null
         wait "$PID" 2>/dev/null
     fi
-    
-    if [ -n "$PID_MONITOR" ] && kill -0 "$PID_MONITOR" 2>/dev/null; then
-        kill "$PID_MONITOR" 2>/dev/null
-        wait "$PID_MONITOR" 2>/dev/null
-    fi
-    
-    sleep 1
 done

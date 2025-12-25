@@ -1,14 +1,13 @@
 #!/bin/bash
 
-# =========================
-#   SLIPSTREAM AUTO-RESTART v1.0
-#   (Opción B: FIFO + filtro + lógica CONFIRMED/CLOSED/RAW)
-#   + Limpieza del log por sesión
-#   + CLOSED: reintenta 2 veces por ciclo y luego espera al reinicio programado
-#   + FIX: Reconexión inmediata y limpia cuando falla el túnel SSH (igual que cuando muere el proceso)
-# =========================
+# ==========================================================
+# SLIPSTREAM AUTO-RESTART v1.1
+# FIFO + detección CONFIRMED / CLOSED / RAW
+# Reconexión limpia por SSH caído o proceso muerto
+# Log limpio por sesión
+# ==========================================================
 
-# Variables globales
+# ------------------ CONFIG ------------------
 CU='dns.devfastfree.linkpc.net'
 US='dns.devfastfreeus.linkpc.net'
 
@@ -22,6 +21,15 @@ W2='181.225.233.40'
 W3='181.225.233.110'
 W4='181.225.233.120'
 
+CHECK_EVERY=2
+HEALTH_CHECK_INTERVAL=10
+HEALTH_CHECK_DELAY=8
+RETRY_DELAY=3
+
+CLOSED_RECONNECT_DELAY=10
+CLOSED_MAX_RETRIES=2
+# --------------------------------------------
+
 export DEBIAN_FRONTEND=noninteractive
 termux-wake-lock 2>/dev/null
 
@@ -32,9 +40,7 @@ AMARILLO='\033[0;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-imprimir_mensaje() { echo -e "${2}[${1}] ${3}${NC}"; }
-
-# === PARSEO DE ARGUMENTOS ===
+# ------------------ ARGS ------------------
 MODO_AUTO=false
 DOMAIN=""
 IP=""
@@ -52,199 +58,74 @@ while [[ $# -gt 0 ]]; do
     -W2) IP="$W2"; shift ;;
     -W3) IP="$W3"; shift ;;
     -W4) IP="$W4"; shift ;;
-    *)
-      echo -e "${ROJO}Flag desconocido: $1${NC}"
-      echo "Uso: $0 [-CU|-US] [-D1|-D2|-D3|-D4|-W1|-W2|-W3|-W4]"
-      exit 1
-      ;;
+    *) echo "Uso: $0 -CU|-US -D1|-D2|-D3|-D4|-W1|-W2|-W3|-W4"; exit 1 ;;
   esac
 done
 
-if [ "$MODO_AUTO" = true ] && [ -z "$IP" ]; then
-  echo -e "${ROJO}Error: Debes especificar región (-CU/-US) y DNS (-D1, -D2, -W1, etc.)${NC}"
-  exit 1
-fi
-if [ -n "$IP" ] && [ "$MODO_AUTO" = false ]; then
-  echo -e "${ROJO}Error: Debes especificar la región (-CU o -US) junto con el DNS${NC}"
-  exit 1
-fi
-
-# === VERIFICAR BROTLI ===
-echo ""
-imprimir_mensaje "INFO" "$CYAN" "Verificando dependencias..."
-if [ -x "/data/data/com.termux/files/usr/bin/brotli" ]; then
-  imprimir_mensaje "OK" "$VERDE" "brotli ✓"
-else
-  imprimir_mensaje "INFO" "$AMARILLO" "Instalando brotli..."
-  yes | pkg install -y brotli 2>/dev/null
-  [ -x "/data/data/com.termux/files/usr/bin/brotli" ] \
-    && imprimir_mensaje "OK" "$VERDE" "brotli ✓" \
-    || imprimir_mensaje "ERROR" "$ROJO" "brotli falló"
-fi
-echo ""
-
-# === DESCARGAR SLIPSTREAM ===
-SLIP_URL="https://raw.githubusercontent.com/Mahboub-power-is-back/quic_over_dns/main/slipstream-client"
-if [ ! -f "slipstream-client" ]; then
-  imprimir_mensaje "INFO" "$AMARILLO" "Descargando slipstream-client..."
-  curl -sL -o slipstream-client "$SLIP_URL"
-  chmod +x slipstream-client
-else
-  imprimir_mensaje "OK" "$VERDE" "slipstream-client ✓"
-fi
-chmod +x slipstream-client 2>/dev/null
-
-# === SALUD DEL TÚNEL ===
+# ------------------ SSH CHECK ------------------
 verificar_tunel() {
-  local output
-  output=$(ssh -p 5201 \
+  ssh -p 5201 \
     -o BatchMode=yes \
-    -o NumberOfPasswordPrompts=0 \
     -o PasswordAuthentication=no \
     -o KbdInteractiveAuthentication=no \
-    -o ChallengeResponseAuthentication=no \
     -o PubkeyAuthentication=no \
     -o PreferredAuthentications=none \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
-    -o ConnectTimeout=10 \
-    -o ConnectionAttempts=1 \
-    -o LogLevel=ERROR \
-    127.0.0.1 exit 2>&1)
-
-  echo "$output" | grep -q "Permission denied"
+    -o ConnectTimeout=8 \
+    127.0.0.1 exit 2>&1 | grep -q "Permission denied"
 }
 
-# === MENÚ CON FLECHAS ===
-SELECCION_GLOBAL=""
-menu_flechas() {
-  local prompt="$1"; shift
-  local opciones=("$@")
-  local sel=0 total=${#opciones[@]} key
-
-  mostrar() {
-    clear
-    echo ""
-    echo "========================================="
-    echo -e "${CYAN}  $prompt${NC}"
-    echo "========================================="
-    echo ""
-    for i in "${!opciones[@]}"; do
-      if [ $i -eq $sel ]; then
-        echo -e "   ${VERDE}▶ ${opciones[$i]}${NC}"
-      else
-        echo "     ${opciones[$i]}"
-      fi
-    done
-    echo ""
-    echo "-----------------------------------------"
-    echo "  Usa ↑↓ para moverte, Enter para elegir"
-    echo "-----------------------------------------"
-  }
-
-  mostrar
-  while true; do
-    IFS= read -rsn1 key
-    if [[ "$key" == $'\x1b' ]]; then
-      read -rsn2 -t 0.1 key
-      if [[ "$key" == "[A" ]]; then
-        ((sel--)); [ $sel -lt 0 ] && sel=$((total - 1)); mostrar
-      elif [[ "$key" == "[B" ]]; then
-        ((sel++)); [ $sel -ge $total ] && sel=0; mostrar
-      fi
-    elif [[ "$key" == "" ]]; then
-      SELECCION_GLOBAL="${opciones[$sel]}"
-      return 0
-    fi
-  done
-}
-
+# ------------------ TIME ------------------
 calcular_espera() {
-  local minuto=$(date +%M) segundo=$(date +%S)
-  minuto=$((10#$minuto)); segundo=$((10#$segundo))
-  local ahora=$((minuto * 60 + segundo))
-  local objetivos=(22 322 622 922 1222 1522 1822 2122 2422 2722 3022 3322)
-  for objetivo in "${objetivos[@]}"; do
-    if [ "$ahora" -lt "$objetivo" ]; then
-      echo $((objetivo - ahora)); return
-    fi
+  local m=$(date +%M) s=$(date +%S)
+  m=$((10#$m)); s=$((10#$s))
+  local now=$((m*60+s))
+  local slots=(22 322 622 922 1222 1522 1822 2122 2422 2722 3022 3322)
+  for t in "${slots[@]}"; do
+    [ "$now" -lt "$t" ] && { echo $((t-now)); return; }
   done
-  echo $((3600 + 22 - ahora))
+  echo $((3600+22-now))
 }
 
-# ================== PARÁMETROS ==================
-CHECK_EVERY=2
-RETRY_DELAY=3
-HEALTH_CHECK_INTERVAL=10
-HEALTH_CHECK_DELAY=8
-
-CLOSED_RECONNECT_DELAY=10
-CLOSED_MAX_RETRIES=2
-# ================================================
-
-# =========================
-#   LOGGING + ESTADO (FIFO)
-# =========================
+# ------------------ LOG / STATE ------------------
 FULL_LOG="$HOME/slipstream-full.log"
-SHOW_REGEX='Starting connection to|Initial connection ID|Listening on port|Connection confirmed|Connection closed|Client exit|Signal'
-
 LOG_PIPE=""
 PID=""
 MON_PID=""
 
-STATE_DIR="${TMPDIR:-/data/data/com.termux/files/usr/tmp}/slip_state"
+STATE_DIR="$HOME/.slip_state"
 mkdir -p "$STATE_DIR"
 
 F_CONF="$STATE_DIR/confirmed"
-F_RAW="$STATE_DIR/got_raw"
-F_LASTRAW="$STATE_DIR/last_raw_ts"
-F_SEEN_CLOSED="$STATE_DIR/closed_seen"
+F_RAW="$STATE_DIR/raw"
+F_CLOSED="$STATE_DIR/closed"
 
 reset_state() {
   echo 0 >"$F_CONF"
   echo 0 >"$F_RAW"
-  echo 0 >"$F_LASTRAW"
-  echo 0 >"$F_SEEN_CLOSED"
-}
-
-get_state_int() {
-  local f="$1"
-  [ -f "$f" ] || { echo 0; return; }
-  local v
-  v=$(cat "$f" 2>/dev/null)
-  [[ "$v" =~ ^[0-9]+$ ]] || v=0
-  echo "$v"
+  echo 0 >"$F_CLOSED"
 }
 
 monitor_fifo() {
   while IFS= read -r line; do
-    printf '%s\n' "$line" >> "$FULL_LOG"
+    echo "$line" >>"$FULL_LOG"
 
-    if echo "$line" | grep -Eqi 'raw bytes'; then
-      echo 1 >"$F_RAW"
-      date +%s >"$F_LASTRAW"
-    fi
+    echo "$line" | grep -qi 'Connection confirmed' && echo 1 >"$F_CONF"
+    echo "$line" | grep -qi 'raw bytes' && echo 1 >"$F_RAW"
+    echo "$line" | grep -qi 'Connection closed' && echo 1 >"$F_CLOSED"
 
-    if echo "$line" | grep -Eqi 'Connection confirmed'; then
-      echo 1 >"$F_CONF"
-    fi
-
-    if echo "$line" | grep -Eqi 'Connection closed'; then
-      echo 1 >"$F_SEEN_CLOSED"
-    fi
-
-    if echo "$line" | grep -Eaiq "$SHOW_REGEX"; then
-      printf '%s\n' "$line"
-    fi
-  done < "$LOG_PIPE"
+    echo "$line" | grep -Eai \
+      'Starting connection|Initial connection ID|Listening on port|Connection confirmed|Connection closed'
+  done <"$LOG_PIPE"
 }
 
 start_slipstream() {
   reset_state
-  : > "$FULL_LOG"   # limpiar log por sesión
+  : >"$FULL_LOG"
 
-  LOG_PIPE="$(mktemp -u "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/slipstream.pipe.XXXXXX")"
-  mkfifo "$LOG_PIPE" || return 1
+  LOG_PIPE="$(mktemp -u "$HOME/slip.pipe.XXXX")"
+  mkfifo "$LOG_PIPE"
 
   ./slipstream-client \
     --tcp-listen-port=5201 \
@@ -260,198 +141,88 @@ start_slipstream() {
 }
 
 stop_slipstream() {
-  if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
-    kill "$PID" 2>/dev/null
-    wait "$PID" 2>/dev/null
-  fi
-
-  if [ -n "$MON_PID" ] && kill -0 "$MON_PID" 2>/dev/null; then
-    kill "$MON_PID" 2>/dev/null
-    wait "$MON_PID" 2>/dev/null
-  fi
-
-  if [ -n "$LOG_PIPE" ]; then
-    rm -f "$LOG_PIPE" 2>/dev/null
-    LOG_PIPE=""
-  fi
-
-  PID=""
-  MON_PID=""
+  kill "$PID" "$MON_PID" 2>/dev/null
+  wait "$PID" "$MON_PID" 2>/dev/null
+  rm -f "$LOG_PIPE"
+  PID=""; MON_PID=""
 }
 
-cleanup() {
-  echo ""
-  echo "[$(date '+%H:%M:%S')] Deteniendo..."
-  stop_slipstream
-  termux-wake-unlock 2>/dev/null
-  echo "[$(date '+%H:%M:%S')] Terminado."
-  exit 0
-}
-trap cleanup SIGINT SIGTERM
+trap 'stop_slipstream; termux-wake-unlock; exit' SIGINT SIGTERM
 
-# === SELECCIÓN ===
-if [ "$MODO_AUTO" = false ]; then
-  sleep 0.5
-  menu_flechas "¿Qué región desea?" "CU" "US"
-  REGION="$SELECCION_GLOBAL"
-  [ "$REGION" = "CU" ] && DOMAIN="$CU" || DOMAIN="$US"
-
-  menu_flechas "¿Tipo de conexión?" "Datos móviles" "WiFi"
-  TIPO_RED="$SELECCION_GLOBAL"
-  if [ "$TIPO_RED" = "Datos móviles" ]; then
-    menu_flechas "¿IP del resolver?" "$D1" "$D2" "$D3" "$D4"
-  else
-    menu_flechas "¿IP del resolver?" "$W1" "$W2" "$W3" "$W4"
-  fi
-  IP="$SELECCION_GLOBAL"
-fi
-
-# === PANTALLA PRINCIPAL ===
+# ------------------ UI ------------------
 clear
 echo "========================================="
-echo "   SLIPSTREAM AUTO-RESTART v1.1"
+echo "   SLIPSTREAM AUTO-RESTART v1.2"
 echo "========================================="
-echo ""
-echo "Configuración:"
-echo -e "  ${CYAN}Región:${NC}   $REGION"
-echo -e "  ${CYAN}Dominio:${NC}  $DOMAIN"
-echo -e "  ${CYAN}Resolver:${NC} $IP"
-echo -e "  ${CYAN}Modo:${NC}     $([ "$MODO_AUTO" = true ] && echo "Automático (sin menú)" || echo "Interactivo")"
+echo "Región:   $REGION"
+echo "Dominio:  $DOMAIN"
+echo "Resolver: $IP"
+echo "Modo:     Automático"
 echo "========================================="
-echo ""
-echo "Log completo (se limpia por sesión): $FULL_LOG"
+echo "Log: $FULL_LOG"
 echo ""
 
-# =========================
-#   LOOP PRINCIPAL
-# =========================
-msg_omitido_last=0
-
+# ------------------ MAIN LOOP ------------------
 while true; do
   espera=$(calcular_espera)
   end_ts=$(( $(date +%s) + espera ))
+  closed_retries=0
 
-  # contador por ciclo (hasta el reinicio programado)
-  closed_retries_cycle=0
+  echo "[$(date +%H:%M:%S)] Próximo reinicio en ${espera}s (~$((espera/60))min)"
 
-  echo "[$(date '+%H:%M:%S')] Próximo reinicio programado en ${espera}s (~$((espera/60))min)"
-  echo ""
-
-  # Dentro del ciclo: reinicios inmediatos sin esperar al próximo "slot" de reinicio
   while [ "$(date +%s)" -lt "$end_ts" ]; do
-    now=$(date +%s)
-    restante=$(( end_ts - now ))
-    [ "$restante" -lt 0 ] && restante=0
+    echo "[$(date +%H:%M:%S)] Iniciando slipstream-client..."
+    start_slipstream
+    sleep "$HEALTH_CHECK_DELAY"
 
-    echo "[$(date '+%H:%M:%S')] Iniciando slipstream-client..."
-    echo "[$(date '+%H:%M:%S')] Ventana de ciclo restante: ${restante}s (~$((restante/60))min)"
-    echo ""
-
-    start_slipstream || {
-      echo -e "[$(date '+%H:%M:%S')] ${ROJO}No se pudo iniciar slipstream-client (FIFO).${NC}"
-      sleep "$RETRY_DELAY"
-      continue
-    }
-
-    contador_health=0
-    primera_verificacion=true
-    restart_now=0
-    msg_omitido_last=0
-
-    # Monitor hasta que toque reiniciar (por fallo) o se acabe el ciclo
     while [ "$(date +%s)" -lt "$end_ts" ]; do
-      now=$(date +%s)
+      sleep "$CHECK_EVERY"
 
-      # 1) Si el proceso murió -> reinicio inmediato
-      if [ -z "$PID" ] || ! kill -0 "$PID" 2>/dev/null; then
-        echo ""
-        echo -e "[$(date '+%H:%M:%S')] ${AMARILLO}Proceso murió. Reconectando...${NC}"
-        restart_now=1
+      # proceso muerto
+      if ! kill -0 "$PID" 2>/dev/null; then
+        echo -e "[$(date +%H:%M:%S)] ${AMARILLO}Proceso murió. Reconectando...${NC}"
+        stop_slipstream
+        sleep "$RETRY_DELAY"
         break
       fi
 
-      # 2) Si hubo "Connection closed" -> reintentar limitado por ciclo
-      seen_closed=$(get_state_int "$F_SEEN_CLOSED")
-      if [ "$seen_closed" -eq 1 ]; then
-        echo 0 >"$F_SEEN_CLOSED"
-        closed_retries_cycle=$((closed_retries_cycle + 1))
+      # connection closed
+      if [ "$(cat "$F_CLOSED")" = "1" ]; then
+        echo 0 >"$F_CLOSED"
+        closed_retries=$((closed_retries+1))
 
-        if [ "$closed_retries_cycle" -le "$CLOSED_MAX_RETRIES" ]; then
-          echo ""
-          echo -e "[$(date '+%H:%M:%S')] ${AMARILLO}Connection closed. Reintento (${closed_retries_cycle}/${CLOSED_MAX_RETRIES}) en ${CLOSED_RECONNECT_DELAY}s...${NC}"
+        if [ "$closed_retries" -le "$CLOSED_MAX_RETRIES" ]; then
+          echo -e "[$(date +%H:%M:%S)] ${AMARILLO}Connection closed. Reintento ${closed_retries}/${CLOSED_MAX_RETRIES} en ${CLOSED_RECONNECT_DELAY}s...${NC}"
           stop_slipstream
           sleep "$CLOSED_RECONNECT_DELAY"
-          restart_now=1
           break
         else
-          restante=$(( end_ts - now ))
-          [ "$restante" -lt 0 ] && restante=0
-          mins=$((restante / 60))
-          secs=$((restante % 60))
-          echo ""
-          echo -e "[$(date '+%H:%M:%S')] ${ROJO}Connection closed repetido (>${CLOSED_MAX_RETRIES} reintentos).${NC}"
-          echo -e "[$(date '+%H:%M:%S')] ${AMARILLO}Espere al próximo reinicio del server en: ${mins}m ${secs}s${NC}"
+          rem=$((end_ts-$(date +%s)))
+          echo -e "[$(date +%H:%M:%S)] ${ROJO}Connection closed repetido.${NC}"
+          echo -e "[$(date +%H:%M:%S)] ${AMARILLO}Espere al próximo reinicio en $((rem/60))m $((rem%60))s${NC}"
           stop_slipstream
-          sleep "$restante"
-          restart_now=0
+          sleep "$rem"
           break
         fi
       fi
 
-      # 3) Health-check cada X segundos
-      contador_health=$((contador_health + CHECK_EVERY))
-
-      if [ "$primera_verificacion" = true ]; then
-        if [ "$contador_health" -ge "$HEALTH_CHECK_DELAY" ]; then
-          primera_verificacion=false
-          contador_health=0
-        fi
-      else
-        if [ "$contador_health" -ge "$HEALTH_CHECK_INTERVAL" ]; then
-          contador_health=0
-
-          confirmed=$(get_state_int "$F_CONF")
-          got_raw=$(get_state_int "$F_RAW")
-
-          # confirmed pero sin raw -> omitir check
-          if [ "$confirmed" -eq 1 ] && [ "$got_raw" -eq 0 ]; then
-            if [ $((now - msg_omitido_last)) -ge 30 ]; then
-              echo -e "[$(date '+%H:%M:%S')] ${CYAN}Conexión confirmada, pero aún sin tráfico (raw). Omitiendo health-check SSH...${NC}"
-              msg_omitido_last=$now
-            fi
-
-          # confirmed y ya hubo raw -> check SSH
-          elif [ "$confirmed" -eq 1 ] && [ "$got_raw" -eq 1 ]; then
-            if ! verificar_tunel; then
-              echo ""
-              echo -e "[$(date '+%H:%M:%S')] ${ROJO}Túnel no responde (SSH). Reconectando...${NC}"
-              # FIX: reinicio inmediato y limpio (igual que proceso muerto)
-              stop_slipstream
-              sleep "$RETRY_DELAY"
-              restart_now=1
-              break
-            else
-              echo -e "[$(date '+%H:%M:%S')] ${VERDE}Túnel OK${NC}"
-            fi
+      # health check
+      if [ "$(cat "$F_CONF")" = "1" ]; then
+        if [ "$(cat "$F_RAW")" = "0" ]; then
+          echo -e "[$(date +%H:%M:%S)] ${CYAN}Conexión confirmada, pero aún sin tráfico (raw). Omitiendo health-check SSH...${NC}"
+        else
+          if ! verificar_tunel; then
+            echo -e "[$(date +%H:%M:%S)] ${ROJO}Túnel no responde (SSH). Reconectando...${NC}"
+            stop_slipstream
+            sleep "$RETRY_DELAY"
+            break
+          else
+            echo -e "[$(date +%H:%M:%S)] ${VERDE}Túnel OK${NC}"
           fi
         fi
       fi
-
-      sleep "$CHECK_EVERY"
     done
-
-    # Limpieza final del intento (si no se limpió ya)
-    stop_slipstream
-
-    # Si hay que reiniciar dentro del mismo ciclo, continúa sin recalcular la ventana.
-    if [ "$restart_now" -eq 1 ] && [ "$(date +%s)" -lt "$end_ts" ]; then
-      continue
-    fi
-
-    # Si no hay reinicio inmediato, salir al reinicio programado (nuevo ciclo)
-    break
   done
 
-  echo ""
-  echo "[$(date '+%H:%M:%S')] Reinicio programado..."
+  echo "[$(date +%H:%M:%S)] Reinicio programado..."
 done

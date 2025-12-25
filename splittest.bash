@@ -1,12 +1,15 @@
 #!/bin/bash
 
 # ==========================================================
-# SLIPSTREAM AUTO-RESTART v1.3
+# SLIPSTREAM AUTO-RESTART v2.0  (SIN SSH)
 # - FIFO + detección CONFIRMED / CLOSED / RAW
+# - Reconexión por "stall" de raw bytes:
+#     * Solo aplica si ya hubo raw alguna vez en la sesión
+#     * Si pasan RAW_STALL_SECONDS sin nuevos "raw bytes" => reconecta
+# - Connection closed:
+#     * reintenta hasta CLOSED_MAX_RETRIES por ciclo
+#     * luego espera al reinicio programado
 # - Log se limpia por sesión
-# - CLOSED: reintenta 2 veces por ciclo y luego espera al reinicio programado
-# - SSH health-check ESTRICTO cada HEALTH_CHECK_INTERVAL (evita “martillar” el túnel)
-# - Mensajes en tiempo real (sin rate-limit artificial)
 # ==========================================================
 
 # ------------------ CONFIG ------------------
@@ -23,13 +26,14 @@ W2='181.225.233.40'
 W3='181.225.233.110'
 W4='181.225.233.120'
 
-CHECK_EVERY=2                 # loop interno (sólo para vigilar proceso/eventos)
-HEALTH_CHECK_INTERVAL=10      # SSH check estricto cada 10s
-HEALTH_CHECK_DELAY=8          # espera inicial tras iniciar cliente
-RETRY_DELAY=3                 # delay para relanzar tras fallo
+CHECK_EVERY=2                 # loop interno
+RETRY_DELAY=3                 # delay al relanzar por fallo "normal"
 
 CLOSED_RECONNECT_DELAY=10
 CLOSED_MAX_RETRIES=2
+
+RAW_STALL_SECONDS=10          # <-- si no llegan "raw bytes" en >= 10s, reconectar (solo si ya hubo raw)
+RAW_STALL_CHECK_EVERY=2       # cada cuánto evaluamos el stall (en segundos)
 # --------------------------------------------
 
 export DEBIAN_FRONTEND=noninteractive
@@ -69,24 +73,6 @@ if [ "$MODO_AUTO" = true ] && [ -z "$IP" ]; then
   exit 1
 fi
 
-# ------------------ SSH CHECK ------------------
-verificar_tunel() {
-  ssh -p 5201 \
-    -o BatchMode=yes \
-    -o NumberOfPasswordPrompts=0 \
-    -o PasswordAuthentication=no \
-    -o KbdInteractiveAuthentication=no \
-    -o ChallengeResponseAuthentication=no \
-    -o PubkeyAuthentication=no \
-    -o PreferredAuthentications=none \
-    -o StrictHostKeyChecking=no \
-    -o UserKnownHostsFile=/dev/null \
-    -o ConnectTimeout=8 \
-    -o ConnectionAttempts=1 \
-    -o LogLevel=ERROR \
-    127.0.0.1 exit 2>&1 | grep -q "Permission denied"
-}
-
 # ------------------ TIME ------------------
 calcular_espera() {
   local m=$(date +%M) s=$(date +%S)
@@ -110,11 +96,13 @@ mkdir -p "$STATE_DIR"
 
 F_CONF="$STATE_DIR/confirmed"
 F_RAW="$STATE_DIR/raw"
+F_LASTRAW="$STATE_DIR/last_raw_ts"
 F_CLOSED="$STATE_DIR/closed"
 
 reset_state() {
   echo 0 >"$F_CONF"
   echo 0 >"$F_RAW"
+  echo 0 >"$F_LASTRAW"
   echo 0 >"$F_CLOSED"
 }
 
@@ -122,9 +110,18 @@ monitor_fifo() {
   while IFS= read -r line; do
     printf '%s\n' "$line" >>"$FULL_LOG"
 
-    echo "$line" | grep -qi 'Connection confirmed' && echo 1 >"$F_CONF"
-    echo "$line" | grep -qi 'raw bytes' && echo 1 >"$F_RAW"
-    echo "$line" | grep -qi 'Connection closed' && echo 1 >"$F_CLOSED"
+    if echo "$line" | grep -qi 'Connection confirmed'; then
+      echo 1 >"$F_CONF"
+    fi
+
+    if echo "$line" | grep -qi 'raw bytes'; then
+      echo 1 >"$F_RAW"
+      date +%s >"$F_LASTRAW"
+    fi
+
+    if echo "$line" | grep -qi 'Connection closed'; then
+      echo 1 >"$F_CLOSED"
+    fi
 
     echo "$line" | grep -Eai \
       'Starting connection|Initial connection ID|Listening on port|Connection confirmed|Connection closed'
@@ -152,7 +149,6 @@ start_slipstream() {
 }
 
 stop_slipstream() {
-  # matar procesos si existen
   [ -n "$PID" ] && kill "$PID" 2>/dev/null
   [ -n "$MON_PID" ] && kill "$MON_PID" 2>/dev/null
 
@@ -177,7 +173,7 @@ trap cleanup SIGINT SIGTERM
 # ------------------ UI ------------------
 clear
 echo "========================================="
-echo "   SLIPSTREAM AUTO-RESTART v1.3"
+echo "   SLIPSTREAM AUTO-RESTART v2.0"
 echo "========================================="
 echo "Región:   $REGION"
 echo "Dominio:  $DOMAIN"
@@ -199,11 +195,8 @@ while true; do
     echo "[$(date +%H:%M:%S)] Iniciando slipstream-client..."
     start_slipstream || { echo -e "${ROJO}No se pudo iniciar slipstream-client${NC}"; sleep "$RETRY_DELAY"; continue; }
 
-    # Espera inicial
-    sleep "$HEALTH_CHECK_DELAY"
-
-    # Programador estricto para health-check
-    next_health_ts=$(( $(date +%s) + HEALTH_CHECK_INTERVAL ))
+    # Inicializa marca de tiempo para stall (0 = aún no hubo raw)
+    last_stall_check_ts=$(date +%s)
 
     while [ "$(date +%s)" -lt "$end_ts" ]; do
       sleep "$CHECK_EVERY"
@@ -217,7 +210,7 @@ while true; do
         break
       fi
 
-      # 2) Connection closed (máx 2 reintentos por ciclo)
+      # 2) Connection closed (máx reintentos por ciclo)
       if [ "$(cat "$F_CLOSED" 2>/dev/null)" = "1" ]; then
         echo 0 >"$F_CLOSED"
         closed_retries=$((closed_retries+1))
@@ -237,28 +230,32 @@ while true; do
         fi
       fi
 
-      # 3) Health-check (estricto cada 10s)
-      if [ "$now" -ge "$next_health_ts" ]; then
-        next_health_ts=$(( now + HEALTH_CHECK_INTERVAL ))
+      # 3) RAW stall check (solo si ya hubo raw)
+      #    Revisa cada RAW_STALL_CHECK_EVERY segundos (para no calcular cada tick si no quieres)
+      if [ $((now - last_stall_check_ts)) -ge "$RAW_STALL_CHECK_EVERY" ]; then
+        last_stall_check_ts=$now
 
-        if [ "$(cat "$F_CONF" 2>/dev/null)" = "1" ]; then
-          if [ "$(cat "$F_RAW" 2>/dev/null)" = "0" ]; then
-            echo -e "[$(date +%H:%M:%S)] ${CYAN}Conexión confirmada, pero aún sin tráfico (raw). Omitiendo health-check SSH...${NC}"
-          else
-            if ! verificar_tunel; then
-              echo -e "[$(date +%H:%M:%S)] ${ROJO}Túnel no responde (SSH). Reconectando...${NC}"
+        got_raw=$(cat "$F_RAW" 2>/dev/null || echo 0)
+        if [ "$got_raw" = "1" ]; then
+          last_raw=$(cat "$F_LASTRAW" 2>/dev/null || echo 0)
+          if [ "$last_raw" -gt 0 ]; then
+            delta=$((now - last_raw))
+            if [ "$delta" -ge "$RAW_STALL_SECONDS" ]; then
+              echo -e "[$(date +%H:%M:%S)] ${ROJO}Sin raw bytes hace ${delta}s (>= ${RAW_STALL_SECONDS}s). Reconectando...${NC}"
               stop_slipstream
               sleep "$RETRY_DELAY"
               break
-            else
-              echo -e "[$(date +%H:%M:%S)] ${VERDE}Túnel OK${NC}"
             fi
+          fi
+        else
+          # Si está confirmado pero aún no hay raw, solo informamos (no reconectar)
+          if [ "$(cat "$F_CONF" 2>/dev/null)" = "1" ]; then
+            echo -e "[$(date +%H:%M:%S)] ${CYAN}Conexión confirmada, esperando tráfico (raw) para habilitar reconexión por stall...${NC}"
           fi
         fi
       fi
     done
 
-    # Si salimos del while interno, garantizar limpieza del intento
     stop_slipstream
   done
 

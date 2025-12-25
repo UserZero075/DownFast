@@ -295,6 +295,14 @@ while true; do
     echo "[$(date '+%H:%M:%S')] Próximo reinicio en ${espera}s (~$((espera/60))min)"
     echo ""
 
+    # Verificar si el puerto 5201 está en uso y limpiarlo
+    PORT_PID=$(lsof -ti:5201 2>/dev/null || ss -lptn 2>/dev/null | grep ':5201' | grep -oP 'pid=\K[0-9]+' | head -1)
+    if [ -n "$PORT_PID" ]; then
+        echo "[$(date '+%H:%M:%S')] Puerto 5201 en uso (PID: $PORT_PID). Liberando..."
+        kill -9 "$PORT_PID" 2>/dev/null
+        sleep 1
+    fi
+
     # Limpiar archivo de timestamp (no inicializar hasta ver raw bytes)
     rm -f "$LAST_RAWBYTES_FILE"
 

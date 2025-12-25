@@ -284,7 +284,7 @@ echo ""
 CHECK_EVERY=2       # cada cuántos segundos revisar si sigue vivo
 RETRY_DELAY=2       # espera antes de relanzar si se cayó
 INACTIVITY_TIMEOUT=10  # reiniciar si no hay raw bytes en X segundos
-LAST_RAWBYTES_FILE="/tmp/slipstream_last_rawbytes.txt"
+LAST_RAWBYTES_FILE=".slipstream_last_rawbytes.txt"  # archivo oculto en directorio actual
 # ================================================================
 
 while true; do
@@ -305,10 +305,12 @@ while true; do
         --domain="${DOMAIN}" \
         --keep-alive-interval=120 \
         --congestion-control=cubic 2>&1 | while IFS= read -r line; do
-            echo "$line"
-            # Si la línea contiene "raw bytes", actualizar timestamp
+            # Si la línea contiene "raw bytes", actualizar timestamp pero NO mostrar
             if echo "$line" | grep -q "raw bytes"; then
                 date +%s > "$LAST_RAWBYTES_FILE"
+            else
+                # Mostrar solo las líneas que NO son raw bytes
+                echo "$line"
             fi
         done &
     PID=$!

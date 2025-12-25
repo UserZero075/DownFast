@@ -1,10 +1,12 @@
 #!/bin/bash
 
 # ==========================================================
-# SLIPSTREAM AUTO-RESTART v1.1
-# FIFO + detección CONFIRMED / CLOSED / RAW
-# Reconexión limpia por SSH caído o proceso muerto
-# Log limpio por sesión
+# SLIPSTREAM AUTO-RESTART v1.3
+# - FIFO + detección CONFIRMED / CLOSED / RAW
+# - Log se limpia por sesión
+# - CLOSED: reintenta 2 veces por ciclo y luego espera al reinicio programado
+# - SSH health-check ESTRICTO cada HEALTH_CHECK_INTERVAL (evita “martillar” el túnel)
+# - Mensajes en tiempo real (sin rate-limit artificial)
 # ==========================================================
 
 # ------------------ CONFIG ------------------
@@ -21,10 +23,10 @@ W2='181.225.233.40'
 W3='181.225.233.110'
 W4='181.225.233.120'
 
-CHECK_EVERY=2
-HEALTH_CHECK_INTERVAL=10
-HEALTH_CHECK_DELAY=8
-RETRY_DELAY=3
+CHECK_EVERY=2                 # loop interno (sólo para vigilar proceso/eventos)
+HEALTH_CHECK_INTERVAL=10      # SSH check estricto cada 10s
+HEALTH_CHECK_DELAY=8          # espera inicial tras iniciar cliente
+RETRY_DELAY=3                 # delay para relanzar tras fallo
 
 CLOSED_RECONNECT_DELAY=10
 CLOSED_MAX_RETRIES=2
@@ -62,17 +64,26 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [ "$MODO_AUTO" = true ] && [ -z "$IP" ]; then
+  echo -e "${ROJO}Error: Debes especificar región (-CU/-US) y DNS (-D1, -D2, -W1, etc.)${NC}"
+  exit 1
+fi
+
 # ------------------ SSH CHECK ------------------
 verificar_tunel() {
   ssh -p 5201 \
     -o BatchMode=yes \
+    -o NumberOfPasswordPrompts=0 \
     -o PasswordAuthentication=no \
     -o KbdInteractiveAuthentication=no \
+    -o ChallengeResponseAuthentication=no \
     -o PubkeyAuthentication=no \
     -o PreferredAuthentications=none \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
     -o ConnectTimeout=8 \
+    -o ConnectionAttempts=1 \
+    -o LogLevel=ERROR \
     127.0.0.1 exit 2>&1 | grep -q "Permission denied"
 }
 
@@ -109,7 +120,7 @@ reset_state() {
 
 monitor_fifo() {
   while IFS= read -r line; do
-    echo "$line" >>"$FULL_LOG"
+    printf '%s\n' "$line" >>"$FULL_LOG"
 
     echo "$line" | grep -qi 'Connection confirmed' && echo 1 >"$F_CONF"
     echo "$line" | grep -qi 'raw bytes' && echo 1 >"$F_RAW"
@@ -122,10 +133,10 @@ monitor_fifo() {
 
 start_slipstream() {
   reset_state
-  : >"$FULL_LOG"
+  : >"$FULL_LOG"  # limpiar log por sesión
 
   LOG_PIPE="$(mktemp -u "$HOME/slip.pipe.XXXX")"
-  mkfifo "$LOG_PIPE"
+  mkfifo "$LOG_PIPE" || return 1
 
   ./slipstream-client \
     --tcp-listen-port=5201 \
@@ -141,18 +152,32 @@ start_slipstream() {
 }
 
 stop_slipstream() {
-  kill "$PID" "$MON_PID" 2>/dev/null
-  wait "$PID" "$MON_PID" 2>/dev/null
-  rm -f "$LOG_PIPE"
-  PID=""; MON_PID=""
+  # matar procesos si existen
+  [ -n "$PID" ] && kill "$PID" 2>/dev/null
+  [ -n "$MON_PID" ] && kill "$MON_PID" 2>/dev/null
+
+  wait "$PID" 2>/dev/null
+  wait "$MON_PID" 2>/dev/null
+
+  [ -n "$LOG_PIPE" ] && rm -f "$LOG_PIPE" 2>/dev/null
+
+  PID=""; MON_PID=""; LOG_PIPE=""
 }
 
-trap 'stop_slipstream; termux-wake-unlock; exit' SIGINT SIGTERM
+cleanup() {
+  echo ""
+  echo "[$(date +%H:%M:%S)] Deteniendo..."
+  stop_slipstream
+  termux-wake-unlock 2>/dev/null
+  echo "[$(date +%H:%M:%S)] Terminado."
+  exit 0
+}
+trap cleanup SIGINT SIGTERM
 
 # ------------------ UI ------------------
 clear
 echo "========================================="
-echo "   SLIPSTREAM AUTO-RESTART v1.2"
+echo "   SLIPSTREAM AUTO-RESTART v1.3"
 echo "========================================="
 echo "Región:   $REGION"
 echo "Dominio:  $DOMAIN"
@@ -172,22 +197,28 @@ while true; do
 
   while [ "$(date +%s)" -lt "$end_ts" ]; do
     echo "[$(date +%H:%M:%S)] Iniciando slipstream-client..."
-    start_slipstream
+    start_slipstream || { echo -e "${ROJO}No se pudo iniciar slipstream-client${NC}"; sleep "$RETRY_DELAY"; continue; }
+
+    # Espera inicial
     sleep "$HEALTH_CHECK_DELAY"
+
+    # Programador estricto para health-check
+    next_health_ts=$(( $(date +%s) + HEALTH_CHECK_INTERVAL ))
 
     while [ "$(date +%s)" -lt "$end_ts" ]; do
       sleep "$CHECK_EVERY"
+      now=$(date +%s)
 
-      # proceso muerto
-      if ! kill -0 "$PID" 2>/dev/null; then
+      # 1) Proceso muerto
+      if [ -z "$PID" ] || ! kill -0 "$PID" 2>/dev/null; then
         echo -e "[$(date +%H:%M:%S)] ${AMARILLO}Proceso murió. Reconectando...${NC}"
         stop_slipstream
         sleep "$RETRY_DELAY"
         break
       fi
 
-      # connection closed
-      if [ "$(cat "$F_CLOSED")" = "1" ]; then
+      # 2) Connection closed (máx 2 reintentos por ciclo)
+      if [ "$(cat "$F_CLOSED" 2>/dev/null)" = "1" ]; then
         echo 0 >"$F_CLOSED"
         closed_retries=$((closed_retries+1))
 
@@ -197,7 +228,7 @@ while true; do
           sleep "$CLOSED_RECONNECT_DELAY"
           break
         else
-          rem=$((end_ts-$(date +%s)))
+          rem=$((end_ts-now)); [ "$rem" -lt 0 ] && rem=0
           echo -e "[$(date +%H:%M:%S)] ${ROJO}Connection closed repetido.${NC}"
           echo -e "[$(date +%H:%M:%S)] ${AMARILLO}Espere al próximo reinicio en $((rem/60))m $((rem%60))s${NC}"
           stop_slipstream
@@ -206,22 +237,29 @@ while true; do
         fi
       fi
 
-      # health check
-      if [ "$(cat "$F_CONF")" = "1" ]; then
-        if [ "$(cat "$F_RAW")" = "0" ]; then
-          echo -e "[$(date +%H:%M:%S)] ${CYAN}Conexión confirmada, pero aún sin tráfico (raw). Omitiendo health-check SSH...${NC}"
-        else
-          if ! verificar_tunel; then
-            echo -e "[$(date +%H:%M:%S)] ${ROJO}Túnel no responde (SSH). Reconectando...${NC}"
-            stop_slipstream
-            sleep "$RETRY_DELAY"
-            break
+      # 3) Health-check (estricto cada 10s)
+      if [ "$now" -ge "$next_health_ts" ]; then
+        next_health_ts=$(( now + HEALTH_CHECK_INTERVAL ))
+
+        if [ "$(cat "$F_CONF" 2>/dev/null)" = "1" ]; then
+          if [ "$(cat "$F_RAW" 2>/dev/null)" = "0" ]; then
+            echo -e "[$(date +%H:%M:%S)] ${CYAN}Conexión confirmada, pero aún sin tráfico (raw). Omitiendo health-check SSH...${NC}"
           else
-            echo -e "[$(date +%H:%M:%S)] ${VERDE}Túnel OK${NC}"
+            if ! verificar_tunel; then
+              echo -e "[$(date +%H:%M:%S)] ${ROJO}Túnel no responde (SSH). Reconectando...${NC}"
+              stop_slipstream
+              sleep "$RETRY_DELAY"
+              break
+            else
+              echo -e "[$(date +%H:%M:%S)] ${VERDE}Túnel OK${NC}"
+            fi
           fi
         fi
       fi
     done
+
+    # Si salimos del while interno, garantizar limpieza del intento
+    stop_slipstream
   done
 
   echo "[$(date +%H:%M:%S)] Reinicio programado..."

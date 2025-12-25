@@ -1,10 +1,11 @@
 #!/bin/bash
 
 # =========================
-#   SLIPSTREAM AUTO-RESTART
+#   SLIPSTREAM AUTO-RESTART v1.0
 #   (Opción B: FIFO + filtro + lógica CONFIRMED/CLOSED/RAW)
 #   + Limpieza del log por sesión
 #   + CLOSED: reintenta 2 veces por ciclo y luego espera al reinicio programado
+#   + FIX: Reconexión inmediata y limpia cuando falla el túnel SSH (igual que cuando muere el proceso)
 # =========================
 
 # Variables globales
@@ -31,9 +32,7 @@ AMARILLO='\033[0;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-imprimir_mensaje() {
-  echo -e "${2}[${1}] ${3}${NC}"
-}
+imprimir_mensaje() { echo -e "${2}[${1}] ${3}${NC}"; }
 
 # === PARSEO DE ARGUMENTOS ===
 MODO_AUTO=false
@@ -55,7 +54,6 @@ while [[ $# -gt 0 ]]; do
     -W4) IP="$W4"; shift ;;
     *)
       echo -e "${ROJO}Flag desconocido: $1${NC}"
-      echo ""
       echo "Uso: $0 [-CU|-US] [-D1|-D2|-D3|-D4|-W1|-W2|-W3|-W4]"
       exit 1
       ;;
@@ -119,7 +117,6 @@ verificar_tunel() {
 
 # === MENÚ CON FLECHAS ===
 SELECCION_GLOBAL=""
-
 menu_flechas() {
   local prompt="$1"; shift
   local opciones=("$@")
@@ -182,7 +179,7 @@ HEALTH_CHECK_INTERVAL=10
 HEALTH_CHECK_DELAY=8
 
 CLOSED_RECONNECT_DELAY=10
-CLOSED_MAX_RETRIES=2   # <-- pedido: solo 2 reintentos por ciclo
+CLOSED_MAX_RETRIES=2
 # ================================================
 
 # =========================
@@ -244,9 +241,7 @@ monitor_fifo() {
 
 start_slipstream() {
   reset_state
-
-  # Limpieza del log por sesión
-  : > "$FULL_LOG"
+  : > "$FULL_LOG"   # limpiar log por sesión
 
   LOG_PIPE="$(mktemp -u "${TMPDIR:-/data/data/com.termux/files/usr/tmp}/slipstream.pipe.XXXXXX")"
   mkfifo "$LOG_PIPE" || return 1
@@ -314,13 +309,14 @@ fi
 # === PANTALLA PRINCIPAL ===
 clear
 echo "========================================="
-echo "   SLIPSTREAM AUTO-RESTART v1.0"
+echo "   SLIPSTREAM AUTO-RESTART v1.1"
 echo "========================================="
 echo ""
 echo "Configuración:"
 echo -e "  ${CYAN}Región:${NC}   $REGION"
 echo -e "  ${CYAN}Dominio:${NC}  $DOMAIN"
 echo -e "  ${CYAN}Resolver:${NC} $IP"
+echo -e "  ${CYAN}Modo:${NC}     $([ "$MODO_AUTO" = true ] && echo "Automático (sin menú)" || echo "Interactivo")"
 echo "========================================="
 echo ""
 echo "Log completo (se limpia por sesión): $FULL_LOG"
@@ -329,7 +325,6 @@ echo ""
 # =========================
 #   LOOP PRINCIPAL
 # =========================
-contador_health=0
 msg_omitido_last=0
 
 while true; do
@@ -339,97 +334,124 @@ while true; do
   # contador por ciclo (hasta el reinicio programado)
   closed_retries_cycle=0
 
-  echo "[$(date '+%H:%M:%S')] Iniciando slipstream-client..."
   echo "[$(date '+%H:%M:%S')] Próximo reinicio programado en ${espera}s (~$((espera/60))min)"
   echo ""
 
-  start_slipstream || {
-    echo -e "${ROJO}No se pudo iniciar slipstream-client (FIFO).${NC}"
-    sleep "$RETRY_DELAY"
-    continue
-  }
-
-  contador_health=0
-  primera_verificacion=true
-  msg_omitido_last=0
-
+  # Dentro del ciclo: reinicios inmediatos sin esperar al próximo "slot" de reinicio
   while [ "$(date +%s)" -lt "$end_ts" ]; do
     now=$(date +%s)
+    restante=$(( end_ts - now ))
+    [ "$restante" -lt 0 ] && restante=0
 
-    if [ -z "$PID" ] || ! kill -0 "$PID" 2>/dev/null; then
-      echo ""
-      echo "[$(date '+%H:%M:%S')] ${AMARILLO}Proceso murió. Reconectando...${NC}"
-      stop_slipstream
+    echo "[$(date '+%H:%M:%S')] Iniciando slipstream-client..."
+    echo "[$(date '+%H:%M:%S')] Ventana de ciclo restante: ${restante}s (~$((restante/60))min)"
+    echo ""
+
+    start_slipstream || {
+      echo -e "[$(date '+%H:%M:%S')] ${ROJO}No se pudo iniciar slipstream-client (FIFO).${NC}"
       sleep "$RETRY_DELAY"
-      break
-    fi
+      continue
+    }
 
-    # ======= CLOSED: máximo 2 reintentos por ciclo =======
-    seen_closed=$(get_state_int "$F_SEEN_CLOSED")
-    if [ "$seen_closed" -eq 1 ]; then
-      echo 0 >"$F_SEEN_CLOSED"
+    contador_health=0
+    primera_verificacion=true
+    restart_now=0
+    msg_omitido_last=0
 
-      closed_retries_cycle=$((closed_retries_cycle + 1))
+    # Monitor hasta que toque reiniciar (por fallo) o se acabe el ciclo
+    while [ "$(date +%s)" -lt "$end_ts" ]; do
+      now=$(date +%s)
 
-      if [ "$closed_retries_cycle" -le "$CLOSED_MAX_RETRIES" ]; then
+      # 1) Si el proceso murió -> reinicio inmediato
+      if [ -z "$PID" ] || ! kill -0 "$PID" 2>/dev/null; then
         echo ""
-        echo -e "[$(date '+%H:%M:%S')] ${AMARILLO}Connection closed detectado. Reintentando (${closed_retries_cycle}/${CLOSED_MAX_RETRIES}) en ${CLOSED_RECONNECT_DELAY}s...${NC}"
-        stop_slipstream
-        sleep "$CLOSED_RECONNECT_DELAY"
+        echo -e "[$(date '+%H:%M:%S')] ${AMARILLO}Proceso murió. Reconectando...${NC}"
+        restart_now=1
         break
+      fi
+
+      # 2) Si hubo "Connection closed" -> reintentar limitado por ciclo
+      seen_closed=$(get_state_int "$F_SEEN_CLOSED")
+      if [ "$seen_closed" -eq 1 ]; then
+        echo 0 >"$F_SEEN_CLOSED"
+        closed_retries_cycle=$((closed_retries_cycle + 1))
+
+        if [ "$closed_retries_cycle" -le "$CLOSED_MAX_RETRIES" ]; then
+          echo ""
+          echo -e "[$(date '+%H:%M:%S')] ${AMARILLO}Connection closed. Reintento (${closed_retries_cycle}/${CLOSED_MAX_RETRIES}) en ${CLOSED_RECONNECT_DELAY}s...${NC}"
+          stop_slipstream
+          sleep "$CLOSED_RECONNECT_DELAY"
+          restart_now=1
+          break
+        else
+          restante=$(( end_ts - now ))
+          [ "$restante" -lt 0 ] && restante=0
+          mins=$((restante / 60))
+          secs=$((restante % 60))
+          echo ""
+          echo -e "[$(date '+%H:%M:%S')] ${ROJO}Connection closed repetido (>${CLOSED_MAX_RETRIES} reintentos).${NC}"
+          echo -e "[$(date '+%H:%M:%S')] ${AMARILLO}Espere al próximo reinicio del server en: ${mins}m ${secs}s${NC}"
+          stop_slipstream
+          sleep "$restante"
+          restart_now=0
+          break
+        fi
+      fi
+
+      # 3) Health-check cada X segundos
+      contador_health=$((contador_health + CHECK_EVERY))
+
+      if [ "$primera_verificacion" = true ]; then
+        if [ "$contador_health" -ge "$HEALTH_CHECK_DELAY" ]; then
+          primera_verificacion=false
+          contador_health=0
+        fi
       else
-        restante=$(( end_ts - now ))
-        [ "$restante" -lt 0 ] && restante=0
-        mins=$((restante / 60))
-        secs=$((restante % 60))
-        echo ""
-        echo -e "[$(date '+%H:%M:%S')] ${ROJO}Connection closed repetido (>${CLOSED_MAX_RETRIES} intentos).${NC}"
-        echo -e "[$(date '+%H:%M:%S')] ${AMARILLO}Espere al próximo reinicio del server en: ${mins}m ${secs}s${NC}"
-        stop_slipstream
-        sleep "$restante"
-        break
-      fi
-    fi
-    # =====================================================
+        if [ "$contador_health" -ge "$HEALTH_CHECK_INTERVAL" ]; then
+          contador_health=0
 
-    contador_health=$((contador_health + CHECK_EVERY))
+          confirmed=$(get_state_int "$F_CONF")
+          got_raw=$(get_state_int "$F_RAW")
 
-    if [ "$primera_verificacion" = true ]; then
-      if [ "$contador_health" -ge "$HEALTH_CHECK_DELAY" ]; then
-        primera_verificacion=false
-        contador_health=0
-      fi
-    else
-      if [ "$contador_health" -ge "$HEALTH_CHECK_INTERVAL" ]; then
-        contador_health=0
+          # confirmed pero sin raw -> omitir check
+          if [ "$confirmed" -eq 1 ] && [ "$got_raw" -eq 0 ]; then
+            if [ $((now - msg_omitido_last)) -ge 30 ]; then
+              echo -e "[$(date '+%H:%M:%S')] ${CYAN}Conexión confirmada, pero aún sin tráfico (raw). Omitiendo health-check SSH...${NC}"
+              msg_omitido_last=$now
+            fi
 
-        confirmed=$(get_state_int "$F_CONF")
-        got_raw=$(get_state_int "$F_RAW")
-
-        # Solo check SSH si confirmed=1 y ya hubo raw
-        if [ "$confirmed" -eq 1 ] && [ "$got_raw" -eq 0 ]; then
-          if [ $((now - msg_omitido_last)) -ge 30 ]; then
-            echo -e "[$(date '+%H:%M:%S')] ${CYAN}Conexión confirmada, pero aún sin tráfico (raw). Omitiendo health-check SSH...${NC}"
-            msg_omitido_last=$now
-          fi
-        elif [ "$confirmed" -eq 1 ] && [ "$got_raw" -eq 1 ]; then
-          if ! verificar_tunel; then
-            echo ""
-            echo -e "[$(date '+%H:%M:%S')] ${ROJO}Túnel no responde (SSH). Reconectando...${NC}"
-            stop_slipstream
-            sleep "$RETRY_DELAY"
-            break
-          else
-            echo -e "[$(date '+%H:%M:%S')] ${VERDE}Túnel OK${NC}"
+          # confirmed y ya hubo raw -> check SSH
+          elif [ "$confirmed" -eq 1 ] && [ "$got_raw" -eq 1 ]; then
+            if ! verificar_tunel; then
+              echo ""
+              echo -e "[$(date '+%H:%M:%S')] ${ROJO}Túnel no responde (SSH). Reconectando...${NC}"
+              # FIX: reinicio inmediato y limpio (igual que proceso muerto)
+              stop_slipstream
+              sleep "$RETRY_DELAY"
+              restart_now=1
+              break
+            else
+              echo -e "[$(date '+%H:%M:%S')] ${VERDE}Túnel OK${NC}"
+            fi
           fi
         fi
       fi
+
+      sleep "$CHECK_EVERY"
+    done
+
+    # Limpieza final del intento (si no se limpió ya)
+    stop_slipstream
+
+    # Si hay que reiniciar dentro del mismo ciclo, continúa sin recalcular la ventana.
+    if [ "$restart_now" -eq 1 ] && [ "$(date +%s)" -lt "$end_ts" ]; then
+      continue
     fi
 
-    sleep "$CHECK_EVERY"
+    # Si no hay reinicio inmediato, salir al reinicio programado (nuevo ciclo)
+    break
   done
 
   echo ""
   echo "[$(date '+%H:%M:%S')] Reinicio programado..."
-  stop_slipstream
 done

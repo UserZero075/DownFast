@@ -35,38 +35,40 @@ BLANCO='\033[1;37m'
 GRIS='\033[0;90m'
 NC='\033[0m'
 
-# Emojis
-EMOJI_CHECK="✓"
-EMOJI_ERROR="✗"
-EMOJI_INFO="ℹ"
-EMOJI_WARN="⚠"
-EMOJI_ROCKET="🚀"
-EMOJI_CLOCK="⏰"
-EMOJI_REFRESH="🔄"
-EMOJI_SKULL="💀"
-EMOJI_LINK="🔗"
-EMOJI_CONFIG="⚙"
-EMOJI_SEARCH="🔍"
-EMOJI_CLEAN="🧹"
-EMOJI_KILL="☠"
-EMOJI_PULSE="💓"
-EMOJI_DEAD="💔"
+# Símbolos Unicode (sin emojis gráficos)
+SYM_CHECK="✓"
+SYM_ERROR="✗"
+SYM_INFO="ℹ"
+SYM_WARN="⚠"
+SYM_ROCKET="▶"
+SYM_CLOCK="○"
+SYM_REFRESH="↻"
+SYM_SKULL="✖"
+SYM_LINK="→"
+SYM_CONFIG="●"
+SYM_SEARCH="◎"
+SYM_CLEAN="◆"
+SYM_KILL="✖"
+SYM_PULSE="♦"
+SYM_DEAD="✖"
+SYM_STOP="■"
+SYM_WAIT="◌"
 
 imprimir_mensaje() {
     local tipo="$1"
     local color="$2"
     local mensaje="$3"
-    local emoji=""
+    local simbolo=""
     
     case "$tipo" in
-        "OK") emoji="$EMOJI_CHECK" ;;
-        "ERROR") emoji="$EMOJI_ERROR" ;;
-        "INFO") emoji="$EMOJI_INFO" ;;
-        "WARN") emoji="$EMOJI_WARN" ;;
-        *) emoji="$tipo" ;;
+        "OK") simbolo="$SYM_CHECK" ;;
+        "ERROR") simbolo="$SYM_ERROR" ;;
+        "INFO") simbolo="$SYM_INFO" ;;
+        "WARN") simbolo="$SYM_WARN" ;;
+        *) simbolo="$tipo" ;;
     esac
     
-    echo -e "${color}${emoji} ${mensaje}${NC}"
+    echo -e "${color}${simbolo} ${mensaje}${NC}"
 }
 
 # === PARSEO DE ARGUMENTOS ===
@@ -179,23 +181,23 @@ menu_flechas() {
     mostrar() {
         clear
         echo ""
-        echo -e "${CYAN}╔═════════════════════════════════════════╗${NC}"
-        echo -e "${CYAN}║${NC}  ${BLANCO}$prompt${NC}"
-        echo -e "${CYAN}╚═════════════════════════════════════════╝${NC}"
+        echo -e "${CYAN}+=========================================+${NC}"
+        echo -e "${CYAN}|${NC}  ${BLANCO}$prompt${NC}"
+        echo -e "${CYAN}+=========================================+${NC}"
         echo ""
 
         for i in "${!opciones[@]}"; do
             if [ $i -eq $sel ]; then
-                echo -e "   ${VERDE}▶ ${BLANCO}${opciones[$i]}${NC}"
+                echo -e "   ${VERDE}> ${BLANCO}${opciones[$i]}${NC}"
             else
                 echo -e "   ${GRIS}  ${opciones[$i]}${NC}"
             fi
         done
 
         echo ""
-        echo -e "${GRIS}─────────────────────────────────────────${NC}"
+        echo -e "${GRIS}-----------------------------------------${NC}"
         echo -e "  ${CYAN}↑↓${NC} Navegar  ${VERDE}Enter${NC} Seleccionar"
-        echo -e "${GRIS}─────────────────────────────────────────${NC}"
+        echo -e "${GRIS}-----------------------------------------${NC}"
     }
 
     mostrar
@@ -334,10 +336,10 @@ colorizar_linea() {
             echo -e "${GRIS}${line}${NC}"
             ;;
         "Connection confirmed.")
-            echo -e "${VERDE}✓ ${line}${NC}"
+            echo -e "${VERDE}${SYM_CHECK} ${line}${NC}"
             ;;
         "Connection closed.")
-            echo -e "${ROJO}✗ ${line}${NC}"
+            echo -e "${ROJO}${SYM_ERROR} ${line}${NC}"
             ;;
         *)
             echo "$line"
@@ -398,7 +400,7 @@ RAW_BYTE_TRIGGER_RESTART="$LOG_DIR/slipstream_trigger_restart_$$"
 
 cleanup() {
     echo ""
-    echo -e "${AMARILLO}⏹  [$(date '+%H:%M:%S')] Deteniendo slipstream...${NC}"
+    echo -e "${AMARILLO}${SYM_STOP}  [$(date '+%H:%M:%S')] Deteniendo slipstream...${NC}"
     
     # Detener watchdog
     if [ -n "$WATCHDOG_PID" ] && kill -0 "$WATCHDOG_PID" 2>/dev/null; then
@@ -420,7 +422,7 @@ cleanup() {
     rm -f "$RAW_BYTE_TRIGGER_RESTART" 2>/dev/null
     
     termux-wake-unlock 2>/dev/null
-    echo -e "${VERDE}${EMOJI_CHECK} [$(date '+%H:%M:%S')] Terminado correctamente.${NC}"
+    echo -e "${VERDE}${SYM_CHECK} [$(date '+%H:%M:%S')] Terminado correctamente.${NC}"
     echo ""
     exit 0
 }
@@ -432,7 +434,7 @@ trap cleanup SIGINT SIGTERM
 if [ "$MODO_AUTO" = false ]; then
     sleep 0.5
 
-    menu_flechas "¿Qué región desea?" "CU" "US"
+    menu_flechas "Que region desea?" "CU" "US"
     REGION="$SELECCION_GLOBAL"
     if [ "$REGION" = "CU" ]; then
         DOMAIN="$CU"
@@ -440,12 +442,12 @@ if [ "$MODO_AUTO" = false ]; then
         DOMAIN="$US"
     fi
 
-    menu_flechas "¿Tipo de conexión?" "Datos móviles" "WiFi"
+    menu_flechas "Tipo de conexion?" "Datos moviles" "WiFi"
     TIPO_RED="$SELECCION_GLOBAL"
-    if [ "$TIPO_RED" = "Datos móviles" ]; then
-        menu_flechas "¿IP del resolver?" "$D1" "$D2" "$D3" "$D4"
+    if [ "$TIPO_RED" = "Datos moviles" ]; then
+        menu_flechas "IP del resolver?" "$D1" "$D2" "$D3" "$D4"
     else
-        menu_flechas "¿IP del resolver?" "$W1" "$W2" "$W3" "$W4"
+        menu_flechas "IP del resolver?" "$W1" "$W2" "$W3" "$W4"
     fi
     IP="$SELECCION_GLOBAL"
 fi
@@ -459,116 +461,116 @@ RETRY_SIGNAL_FILE="$LOG_DIR/slipstream_retry_$$"
 # Limpiar log anterior
 > "$PIPE_PATH"
 
-# ═══════════════════════════════════════════════════════════════════
+# ===================================================================
 # === PANTALLA PRINCIPAL ===
-# ═══════════════════════════════════════════════════════════════════
+# ===================================================================
 
 clear
 echo ""
-echo -e "${MAGENTA}╔═══════════════════════════════════════════════╗${NC}"
-echo -e "${MAGENTA}║${NC}  ${BLANCO}${EMOJI_ROCKET} SLIPSTREAM AUTO-RESTART ${MAGENTA}v1.6${NC}       ${MAGENTA}║${NC}"
-echo -e "${MAGENTA}╚═══════════════════════════════════════════════╝${NC}"
+echo -e "${MAGENTA}+===============================================+${NC}"
+echo -e "${MAGENTA}|${NC}  ${BLANCO}${SYM_ROCKET} SLIPSTREAM AUTO-RESTART ${MAGENTA}v1.6${NC}         ${MAGENTA}|${NC}"
+echo -e "${MAGENTA}+===============================================+${NC}"
 echo ""
-echo -e "${CYAN}${EMOJI_CONFIG} Configuración:${NC}"
-echo -e "  ${GRIS}┌─${NC} ${BLANCO}Región:${NC}   ${VERDE}$REGION${NC}"
-echo -e "  ${GRIS}├─${NC} ${BLANCO}Dominio:${NC}  ${CYAN}$DOMAIN${NC}"
-echo -e "  ${GRIS}├─${NC} ${BLANCO}Resolver:${NC} ${AMARILLO}$IP${NC}"
+echo -e "${CYAN}${SYM_CONFIG} Configuracion:${NC}"
+echo -e "  ${GRIS}+-${NC} ${BLANCO}Region:${NC}   ${VERDE}$REGION${NC}"
+echo -e "  ${GRIS}|-${NC} ${BLANCO}Dominio:${NC}  ${CYAN}$DOMAIN${NC}"
+echo -e "  ${GRIS}|-${NC} ${BLANCO}Resolver:${NC} ${AMARILLO}$IP${NC}"
 if [ "$MODO_AUTO" = true ]; then
-    echo -e "  ${GRIS}└─${NC} ${BLANCO}Modo:${NC}     ${AMARILLO}Automático${NC}"
+    echo -e "  ${GRIS}+-${NC} ${BLANCO}Modo:${NC}     ${AMARILLO}Automatico${NC}"
 else
-    echo -e "  ${GRIS}└─${NC} ${BLANCO}Modo:${NC}     ${VERDE}Interactivo${NC}"
+    echo -e "  ${GRIS}+-${NC} ${BLANCO}Modo:${NC}     ${VERDE}Interactivo${NC}"
 fi
 echo ""
-echo -e "${GRIS}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${CYAN}${EMOJI_INFO} Para ver todos los logs (incluyendo debug):${NC}"
-echo -e "  ${VERDE}▶${NC} Abre otra ventana de Termux"
-echo -e "  ${VERDE}▶${NC} Ejecuta: ${BLANCO}tail -f $PIPE_PATH${NC}"
-echo -e "${GRIS}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${GRIS}----------------------------------------------${NC}"
+echo -e "${CYAN}${SYM_INFO} Para ver todos los logs (incluyendo debug):${NC}"
+echo -e "  ${VERDE}>${NC} Abre otra ventana de Termux"
+echo -e "  ${VERDE}>${NC} Ejecuta: ${BLANCO}tail -f $PIPE_PATH${NC}"
+echo -e "${GRIS}----------------------------------------------${NC}"
 echo ""
 
-# ═══════════════════════════════════════════════════════════════════
+# ===================================================================
 # === LIMPIEZA COMPLETA DE PROCESOS ZOMBIES ===
-# ═══════════════════════════════════════════════════════════════════
+# ===================================================================
 
-echo -e "${CYAN}${EMOJI_SEARCH} Verificando procesos previos...${NC}"
+echo -e "${CYAN}${SYM_SEARCH} Verificando procesos previos...${NC}"
 echo ""
 
 ALGO_MATADO=false
 
 # 1. Matar instancias previas del SCRIPT
-echo -e "  ${GRIS}├─${NC} Buscando scripts duplicados..."
+echo -e "  ${GRIS}|-${NC} Buscando scripts duplicados..."
 SCRIPTS_ANTES=$(pgrep -af "$SCRIPT_NAME" 2>/dev/null | grep -v "^$MY_PID " | wc -l)
 if [ "$SCRIPTS_ANTES" -gt 0 ]; then
     matar_scripts_previos
     ALGO_MATADO=true
-    echo -e "  ${GRIS}│  ${NC}${AMARILLO}${EMOJI_KILL} Terminadas $SCRIPTS_ANTES instancia(s) del script${NC}"
+    echo -e "  ${GRIS}|  ${NC}${AMARILLO}${SYM_KILL} Terminadas $SCRIPTS_ANTES instancia(s) del script${NC}"
 else
-    echo -e "  ${GRIS}│  ${NC}${VERDE}${EMOJI_CHECK} Sin scripts duplicados${NC}"
+    echo -e "  ${GRIS}|  ${NC}${VERDE}${SYM_CHECK} Sin scripts duplicados${NC}"
 fi
 
 # 2. Matar slipstream-client
-echo -e "  ${GRIS}├─${NC} Buscando slipstream-client..."
+echo -e "  ${GRIS}|-${NC} Buscando slipstream-client..."
 if pgrep -f "slipstream-client" > /dev/null 2>&1; then
     SLIP_PIDS=$(pgrep -f "slipstream-client" 2>/dev/null | tr '\n' ' ')
     pkill -9 -f "slipstream-client" 2>/dev/null
     ALGO_MATADO=true
-    echo -e "  ${GRIS}│  ${NC}${AMARILLO}${EMOJI_KILL} Terminados PIDs: ${SLIP_PIDS}${NC}"
+    echo -e "  ${GRIS}|  ${NC}${AMARILLO}${SYM_KILL} Terminados PIDs: ${SLIP_PIDS}${NC}"
 else
-    echo -e "  ${GRIS}│  ${NC}${VERDE}${EMOJI_CHECK} Sin procesos slipstream-client${NC}"
+    echo -e "  ${GRIS}|  ${NC}${VERDE}${SYM_CHECK} Sin procesos slipstream-client${NC}"
 fi
 
 # 3. Matar tails huérfanos
-echo -e "  ${GRIS}├─${NC} Buscando tails huérfanos..."
+echo -e "  ${GRIS}|-${NC} Buscando tails huerfanos..."
 TAILS_ANTES=$(pgrep -af "tail.*slipstream" 2>/dev/null | wc -l)
 if [ "$TAILS_ANTES" -gt 0 ]; then
     matar_tails_huerfanos
     ALGO_MATADO=true
-    echo -e "  ${GRIS}│  ${NC}${AMARILLO}${EMOJI_KILL} Terminados $TAILS_ANTES tail(s)${NC}"
+    echo -e "  ${GRIS}|  ${NC}${AMARILLO}${SYM_KILL} Terminados $TAILS_ANTES tail(s)${NC}"
 else
-    echo -e "  ${GRIS}│  ${NC}${VERDE}${EMOJI_CHECK} Sin tails huérfanos${NC}"
+    echo -e "  ${GRIS}|  ${NC}${VERDE}${SYM_CHECK} Sin tails huerfanos${NC}"
 fi
 
 # 4. Liberar puerto 5201
-echo -e "  ${GRIS}└─${NC} Verificando puerto 5201..."
+echo -e "  ${GRIS}+-${NC} Verificando puerto 5201..."
 if limpiar_puerto_5201; then
     ALGO_MATADO=true
-    echo -e "     ${AMARILLO}${EMOJI_KILL} Puerto 5201 liberado${NC}"
+    echo -e "     ${AMARILLO}${SYM_KILL} Puerto 5201 liberado${NC}"
 else
-    echo -e "     ${VERDE}${EMOJI_CHECK} Puerto 5201 libre${NC}"
+    echo -e "     ${VERDE}${SYM_CHECK} Puerto 5201 libre${NC}"
 fi
 
 # 5. Si se mató algo, esperar para que el sistema libere recursos
 if [ "$ALGO_MATADO" = true ]; then
     echo ""
-    echo -e "${AMARILLO}${EMOJI_CLOCK} Esperando 3 segundos para liberar recursos...${NC}"
+    echo -e "${AMARILLO}${SYM_CLOCK} Esperando 3 segundos para liberar recursos...${NC}"
     sleep 3
 fi
 
 # 6. Verificación final con pgrep
 echo ""
-echo -e "${CYAN}${EMOJI_CLEAN} Estado final de procesos:${NC}"
+echo -e "${CYAN}${SYM_CLEAN} Estado final de procesos:${NC}"
 
 # Buscar cualquier proceso relacionado con slipstream
 PROCESOS_SLIP=$(pgrep -af slipstream 2>/dev/null | grep -v "^$MY_PID ")
 
 if [ -n "$PROCESOS_SLIP" ]; then
-    echo -e "${MAGENTA}┌─ Procesos slipstream encontrados:${NC}"
+    echo -e "${MAGENTA}+- Procesos slipstream encontrados:${NC}"
     while IFS= read -r linea; do
-        echo -e "${MAGENTA}│  ${linea}${NC}"
+        echo -e "${MAGENTA}|  ${linea}${NC}"
     done <<< "$PROCESOS_SLIP"
-    echo -e "${MAGENTA}└─────────────────────────────────${NC}"
+    echo -e "${MAGENTA}+---------------------------------${NC}"
     echo ""
-    echo -e "${ROJO}${EMOJI_WARN} ¡ADVERTENCIA! Aún hay procesos activos.${NC}"
+    echo -e "${ROJO}${SYM_WARN} ADVERTENCIA: Aun hay procesos activos.${NC}"
     echo -e "${AMARILLO}   Considera forzar el cierre de Termux si hay problemas.${NC}"
 else
-    echo -e "${VERDE}${EMOJI_CHECK} Sin procesos zombies - Sistema limpio${NC}"
+    echo -e "${VERDE}${SYM_CHECK} Sin procesos zombies - Sistema limpio${NC}"
 fi
 
 # 7. Crear archivo de lock
 echo "$MY_PID" > "$LOCK_FILE"
 
 echo ""
-echo -e "${GRIS}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${GRIS}----------------------------------------------${NC}"
 echo ""
 
 # === FUNCIÓN WATCHDOG PARA MONITOREAR RAW BYTES ===
@@ -601,7 +603,7 @@ iniciar_watchdog() {
                 # Verificar si ha pasado mucho tiempo sin raw bytes
                 if [ "$TIEMPO_SIN_RAW" -gt "$TIMEOUT_RAW_BYTES" ]; then
                     TIEMPO_FORMATEADO=$(formatear_tiempo "$TIEMPO_SIN_RAW")
-                    echo -e "${ROJO}${EMOJI_DEAD} [$(date '+%H:%M:%S')] Túnel caído, sin conexión hace ${TIEMPO_FORMATEADO}, reiniciando...${NC}"
+                    echo -e "${ROJO}${SYM_DEAD} [$(date '+%H:%M:%S')] Tunel caido, sin conexion hace ${TIEMPO_FORMATEADO}, reiniciando...${NC}"
                     
                     # Trigger restart
                     echo "RESTART_NEEDED" > "$RAW_BYTE_TRIGGER_RESTART"
@@ -616,7 +618,7 @@ iniciar_watchdog() {
                 # Mostrar estado cada 30 segundos
                 if [ "$((AHORA - ULTIMO_STATUS_TS))" -ge "$STATUS_INTERVAL" ]; then
                     TIEMPO_FORMATEADO=$(formatear_tiempo "$TIEMPO_SIN_RAW")
-                    echo -e "${VERDE}${EMOJI_PULSE} [$(date '+%H:%M:%S')] Túnel operativo, última conexión hace ${TIEMPO_FORMATEADO}${NC}"
+                    echo -e "${VERDE}${SYM_PULSE} [$(date '+%H:%M:%S')] Tunel operativo, ultima conexion hace ${TIEMPO_FORMATEADO}${NC}"
                     ULTIMO_STATUS_TS=$AHORA
                 fi
             fi
@@ -699,8 +701,8 @@ while true; do
     
     RETRY_COUNT=0
 
-    echo -e "${VERDE}${EMOJI_ROCKET} [$(date '+%H:%M:%S')] Iniciando slipstream-client...${NC}"
-    echo -e "${CYAN}${EMOJI_CLOCK} [$(date '+%H:%M:%S')] Próximo reinicio en ${BLANCO}${espera}s${NC} ${GRIS}(~$((espera/60))min)${NC}"
+    echo -e "${VERDE}${SYM_ROCKET} [$(date '+%H:%M:%S')] Iniciando slipstream-client...${NC}"
+    echo -e "${CYAN}${SYM_CLOCK} [$(date '+%H:%M:%S')] Proximo reinicio en ${BLANCO}${espera}s${NC} ${GRIS}(~$((espera/60))min)${NC}"
     echo ""
 
     TMP_LOG="$LOG_DIR/slipstream_temp_$$.log"
@@ -732,7 +734,7 @@ while true; do
             > "$TMP_LOG"
             
             iniciar_slipstream "$TMP_LOG"
-            echo -e "${VERDE}${EMOJI_LINK} [$(date '+%H:%M:%S')] Reinicio por túnel caído completado${NC}"
+            echo -e "${VERDE}${SYM_LINK} [$(date '+%H:%M:%S')] Reinicio por tunel caido completado${NC}"
             echo ""
             
             continue
@@ -745,7 +747,7 @@ while true; do
             if [ "$RETRY_COUNT" -lt "$MAX_RETRIES" ]; then
                 RETRY_COUNT=$((RETRY_COUNT + 1))
                 echo ""
-                echo -e "${AMARILLO}${EMOJI_WARN} [$(date '+%H:%M:%S')] Conexión cerrada. Reintentando... (${RETRY_COUNT}/${MAX_RETRIES})${NC}"
+                echo -e "${AMARILLO}${SYM_WARN} [$(date '+%H:%M:%S')] Conexion cerrada. Reintentando... (${RETRY_COUNT}/${MAX_RETRIES})${NC}"
                 
                 # Detener monitoreo
                 rm -f "$RAW_BYTE_MONITOR_FLAG"
@@ -765,7 +767,7 @@ while true; do
                 > "$TMP_LOG"
                 
                 iniciar_slipstream "$TMP_LOG"
-                echo -e "${VERDE}${EMOJI_LINK} [$(date '+%H:%M:%S')] Reintento iniciado${NC}"
+                echo -e "${VERDE}${SYM_LINK} [$(date '+%H:%M:%S')] Reintento iniciado${NC}"
                 echo ""
                 
             else
@@ -777,8 +779,8 @@ while true; do
                 if [ "$tiempo_restante" -gt 0 ]; then
                     minutos=$((tiempo_restante / 60))
                     segundos=$((tiempo_restante % 60))
-                    echo -e "${ROJO}${EMOJI_ERROR} [$(date '+%H:%M:%S')] Máximo de reintentos alcanzado (${MAX_RETRIES})${NC}"
-                    echo -e "${AMARILLO}⏳ Espere al próximo reinicio en ${BLANCO}${minutos}m ${segundos}s${AMARILLO}, el cliente reconectará${NC}"
+                    echo -e "${ROJO}${SYM_ERROR} [$(date '+%H:%M:%S')] Maximo de reintentos alcanzado (${MAX_RETRIES})${NC}"
+                    echo -e "${AMARILLO}${SYM_WAIT} Espere al proximo reinicio en ${BLANCO}${minutos}m ${segundos}s${AMARILLO}, el cliente reconectara${NC}"
                     echo ""
                 fi
             fi
@@ -794,7 +796,7 @@ while true; do
         if ! kill -0 "$SLIP_PID" 2>/dev/null; then
             if [ ! -f "$RETRY_SIGNAL_FILE" ] || ! grep -q "CLOSED" "$RETRY_SIGNAL_FILE" 2>/dev/null; then
                 echo ""
-                echo -e "${ROJO}${EMOJI_SKULL} [$(date '+%H:%M:%S')] slipstream-client crasheó. Reconectando...${NC}"
+                echo -e "${ROJO}${SYM_SKULL} [$(date '+%H:%M:%S')] slipstream-client crasheo. Reconectando...${NC}"
                 
                 # Detener monitoreo
                 rm -f "$RAW_BYTE_MONITOR_FLAG"
@@ -808,7 +810,7 @@ while true; do
 
                 iniciar_slipstream "$TMP_LOG"
                 
-                echo -e "${VERDE}${EMOJI_LINK} [$(date '+%H:%M:%S')] Reconexión por crash iniciada (PID: $SLIP_PID)${NC}"
+                echo -e "${VERDE}${SYM_LINK} [$(date '+%H:%M:%S')] Reconexion por crash iniciada (PID: $SLIP_PID)${NC}"
             fi
         fi
         
@@ -816,7 +818,7 @@ while true; do
     done
 
     echo ""
-    echo -e "${AMARILLO}${EMOJI_REFRESH} [$(date '+%H:%M:%S')] Reinicio programado ejecutándose...${NC}"
+    echo -e "${AMARILLO}${SYM_REFRESH} [$(date '+%H:%M:%S')] Reinicio programado ejecutandose...${NC}"
     
     # Detener monitoreo
     rm -f "$RAW_BYTE_MONITOR_FLAG"

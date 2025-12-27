@@ -468,7 +468,7 @@ RETRY_SIGNAL_FILE="$LOG_DIR/slipstream_retry_$$"
 clear
 echo ""
 echo -e "${MAGENTA}+===============================================+${NC}"
-echo -e "${MAGENTA}|${NC}  ${BLANCO}${SYM_ROCKET} SLIPSTREAM AUTO-RESTART ${MAGENTA}v1.6${NC}         ${MAGENTA}|${NC}"
+echo -e "${MAGENTA}|${NC}  ${BLANCO}${SYM_ROCKET} SLIPSTREAM DEVFAST ${MAGENTA}v1.6${NC}         ${MAGENTA}|${NC}"
 echo -e "${MAGENTA}+===============================================+${NC}"
 echo ""
 echo -e "${CYAN}${SYM_CONFIG} Configuracion:${NC}"

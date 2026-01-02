@@ -3,6 +3,8 @@
 # Variables globales
 CU='dns.devfastfree.linkpc.net'
 US='dns.devfastfreeus.linkpc.net'
+EU='dns.devfastfreeeu.linkpc.net'
+CA='dns.devfastfreeca.linkpc.net'
 
 D1='200.55.128.130'
 D2='200.55.128.140'
@@ -93,6 +95,18 @@ while [[ $# -gt 0 ]]; do
             MODO_AUTO=true
             shift
             ;;
+        -EU)
+            REGION="EU"
+            DOMAIN="$EU"
+            MODO_AUTO=true
+            shift
+            ;;
+        -CA)
+            REGION="CA"
+            DOMAIN="$CA"
+            MODO_AUTO=true
+            shift
+            ;;
         -D1)
             IP="$D1"
             shift
@@ -156,11 +170,19 @@ while [[ $# -gt 0 ]]; do
         *)
             echo -e "${ROJO}Flag desconocido: $1${NC}"
             echo ""
-            echo "Uso: $0 [-CU|-US] [-D1|-D2|-D3|-D4|-W1|-W2|-W3|-W4] [-T1|-T2|-T3|-T4|-T5|-T6]"
+            echo "Uso: $0 [-CU|-US|-EU|-CA] [-D1|-D2|-D3|-D4|-W1|-W2|-W3|-W4] [-T1|-T2|-T3|-T4|-T5|-T6]"
+            echo ""
+            echo "Regiones disponibles:"
+            echo "  -CU    Cuba"
+            echo "  -US    Estados Unidos"
+            echo "  -EU    Europa"
+            echo "  -CA    Canada"
             echo ""
             echo "Ejemplos:"
             echo "  $0 -CU -D1 -T6    # Region CU, DNS Datos 1, Timeout 6s"
             echo "  $0 -US -W2 -T1    # Region US, DNS WiFi 2, Timeout 1s"
+            echo "  $0 -EU -D1 -T4    # Region EU, DNS Datos 1, Timeout 4s"
+            echo "  $0 -CA -W1 -T3    # Region CA, DNS WiFi 1, Timeout 3s"
             echo "  $0                # Modo interactivo (menu)"
             exit 1
             ;;
@@ -169,12 +191,12 @@ done
 
 # Validaciones
 if [ "$MODO_AUTO" = true ] && [ -z "$IP" ]; then
-    echo -e "${ROJO}Error: Debes especificar tanto la region (-CU o -US) como el DNS (-D1, -D2, -W1, etc.)${NC}"
+    echo -e "${ROJO}Error: Debes especificar tanto la region (-CU, -US, -EU o -CA) como el DNS (-D1, -D2, -W1, etc.)${NC}"
     exit 1
 fi
 
 if [ -n "$IP" ] && [ "$MODO_AUTO" = false ]; then
-    echo -e "${ROJO}Error: Debes especificar la region (-CU o -US) junto con el DNS${NC}"
+    echo -e "${ROJO}Error: Debes especificar la region (-CU, -US, -EU o -CA) junto con el DNS${NC}"
     exit 1
 fi
 
@@ -484,13 +506,25 @@ trap cleanup SIGINT SIGTERM
 if [ "$MODO_AUTO" = false ]; then
     sleep 0.5
 
-    menu_flechas "Que region desea?" "CU" "US"
-    REGION="$SELECCION_GLOBAL"
-    if [ "$REGION" = "CU" ]; then
-        DOMAIN="$CU"
-    else
-        DOMAIN="$US"
-    fi
+    menu_flechas "Que region desea?" "CU (Cuba)" "US (Estados Unidos)" "EU (Europa)" "CA (Canada)"
+    case "$SELECCION_GLOBAL" in
+        "CU (Cuba)")
+            REGION="CU"
+            DOMAIN="$CU"
+            ;;
+        "US (Estados Unidos)")
+            REGION="US"
+            DOMAIN="$US"
+            ;;
+        "EU (Europa)")
+            REGION="EU"
+            DOMAIN="$EU"
+            ;;
+        "CA (Canada)")
+            REGION="CA"
+            DOMAIN="$CA"
+            ;;
+    esac
 
     menu_flechas "Tipo de conexion?" "Datos moviles" "WiFi"
     TIPO_RED="$SELECCION_GLOBAL"
@@ -532,7 +566,7 @@ echo "$TIMEOUT_RAW_BYTES" > "$TIMEOUT_CONFIG_FILE"
 clear
 echo ""
 echo -e "${MAGENTA}+===============================================+${NC}"
-echo -e "${MAGENTA}|${NC}  ${BLANCO}${SYM_ROCKET} SLIPSTREAM DEVFAST ${MAGENTA}v1.9${NC}         ${MAGENTA}|${NC}"
+echo -e "${MAGENTA}|${NC}  ${BLANCO}${SYM_ROCKET} SLIPSTREAM DEVFAST ${MAGENTA}v2.0${NC}         ${MAGENTA}|${NC}"
 echo -e "${MAGENTA}+===============================================+${NC}"
 echo ""
 echo -e "${CYAN}${SYM_CONFIG} Configuracion:${NC}"

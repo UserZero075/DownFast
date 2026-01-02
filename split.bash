@@ -186,7 +186,7 @@ fi
 
 # === DESCARGAR SLIPSTREAM (silencioso) ===
 
-SLIP_URL="https://raw.githubusercontent.com/Mahboub-power-is-back/quic_over_dns/main/slipstream-client"
+SLIP_URL="https://raw.githubusercontent.com/UserZero075/DownFast/main/slipstream-clientX64"
 
 if [ ! -f "slipstream-client" ]; then
     curl -sL -o slipstream-client "$SLIP_URL"

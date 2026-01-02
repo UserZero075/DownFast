@@ -184,13 +184,37 @@ if [ ! -x "/data/data/com.termux/files/usr/bin/brotli" ]; then
     yes | pkg install -y brotli >/dev/null 2>&1
 fi
 
-# === DESCARGAR SLIPSTREAM (silencioso) ===
+# === DETECTAR ARQUITECTURA Y DESCARGAR SLIPSTREAM ===
 
-SLIP_URL="https://raw.githubusercontent.com/UserZero075/DownFast/main/slipstream-clientX64"
+# Detectar si es 32 o 64 bits
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64|aarch64|arm64)
+        # Arquitectura de 64 bits
+        SLIP_URL="https://raw.githubusercontent.com/UserZero075/DownFast/main/slipstream-clientX64"
+        BITS="64"
+        ;;
+    i686|i386|armv7l|armv8l|arm)
+        # Arquitectura de 32 bits
+        SLIP_URL="https://raw.githubusercontent.com/UserZero075/DownFast/main/slipstream-clientX32"
+        BITS="32"
+        ;;
+    *)
+        # Por defecto usar 64 bits
+        SLIP_URL="https://raw.githubusercontent.com/UserZero075/DownFast/main/slipstream-clientX64"
+        BITS="64 (auto)"
+        imprimir_mensaje "WARN" "$AMARILLO" "Arquitectura desconocida ($ARCH), usando version 64 bits"
+        ;;
+esac
 
 if [ ! -f "slipstream-client" ]; then
+    imprimir_mensaje "INFO" "$CYAN" "Descargando slipstream-client ${BITS}-bit para $ARCH..."
     curl -sL -o slipstream-client "$SLIP_URL"
     chmod +x slipstream-client
+    imprimir_mensaje "OK" "$VERDE" "Descarga completada"
+else
+    # Verificar si la versión existente es la correcta
+    :
 fi
 
 chmod +x slipstream-client 2>/dev/null

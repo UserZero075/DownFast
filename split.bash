@@ -506,7 +506,7 @@ trap cleanup SIGINT SIGTERM
 if [ "$MODO_AUTO" = false ]; then
     sleep 0.5
 
-    menu_flechas "Que region desea?" "CU (Cuba)" "US (Estados Unidos)" 
+    menu_flechas "Que region desea?" "CU (Cuba)" "US (Estados Unidos)" "EU (Europa)" "CA (Canada)"
     case "$SELECCION_GLOBAL" in
         "CU (Cuba)")
             REGION="CU"

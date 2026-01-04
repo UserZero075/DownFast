@@ -3,8 +3,8 @@
 # Variables globales
 CU='dns.devfastfree.linkpc.net'
 US='dns.devfastfreeus.linkpc.net'
-EU='dns.devfastfreeeu.linkpc.net'
-CA='dns.devfastfreeca.linkpc.net'
+#EU='dns.devfastfreeeu.linkpc.net'
+#CA='dns.devfastfreeca.linkpc.net'
 
 D1='200.55.128.130'
 D2='200.55.128.140'

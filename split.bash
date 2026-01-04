@@ -3,8 +3,8 @@
 # Variables globales
 CU='dns.devfastfree.linkpc.net'
 US='dns.devfastfreeus.linkpc.net'
-#EU='dns.devfastfreeeu.linkpc.net'
-#CA='dns.devfastfreeca.linkpc.net'
+EU='dns.devfastfreeeu.linkpc.net'
+CA='dns.devfastfreeca.linkpc.net'
 
 D1='200.55.128.130'
 D2='200.55.128.140'
@@ -506,7 +506,7 @@ trap cleanup SIGINT SIGTERM
 if [ "$MODO_AUTO" = false ]; then
     sleep 0.5
 
-    menu_flechas "Que region desea?" "CU (Cuba)" "US (Estados Unidos)" "EU (Europa)" "CA (Canada)"
+    menu_flechas "Que region desea?" "CU (Cuba)" "US (Estados Unidos)" 
     case "$SELECCION_GLOBAL" in
         "CU (Cuba)")
             REGION="CU"

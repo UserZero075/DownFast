@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Variables globales -
+# Variables globales -.
 CU='dns.devfastfree.linkpc.net'
 CU2='dns.devfastfreecu.work.gd'
 US='dns.devfastfreeus.linkpc.net'

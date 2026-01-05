@@ -2,6 +2,7 @@
 
 # Variables globales -
 CU='dns.devfastfree.linkpc.net'
+CU2='dns.devfastfreecu.work.gd'
 US='dns.devfastfreeus.linkpc.net'
 EU='dns.devfastfreeeu.linkpc.net'
 CA='dns.devfastfreeca.linkpc.net'
@@ -89,6 +90,12 @@ while [[ $# -gt 0 ]]; do
             MODO_AUTO=true
             shift
             ;;
+        -CU2)
+            REGION="CU2"
+            DOMAIN="$CU2"
+            MODO_AUTO=true
+            shift
+            ;;
         -US)
             REGION="US"
             DOMAIN="$US"
@@ -170,20 +177,22 @@ while [[ $# -gt 0 ]]; do
         *)
             echo -e "${ROJO}Flag desconocido: $1${NC}"
             echo ""
-            echo "Uso: $0 [-CU|-US|-EU|-CA] [-D1|-D2|-D3|-D4|-W1|-W2|-W3|-W4] [-T1|-T2|-T3|-T4|-T5|-T6]"
+            echo "Uso: $0 [-CU|-CU2|-US|-EU|-CA] [-D1|-D2|-D3|-D4|-W1|-W2|-W3|-W4] [-T1|-T2|-T3|-T4|-T5|-T6]"
             echo ""
             echo "Regiones disponibles:"
             echo "  -CU    Cuba"
+            echo "  -CU2   Cuba 2"
             echo "  -US    Estados Unidos"
             echo "  -EU    Europa"
             echo "  -CA    Canada"
             echo ""
             echo "Ejemplos:"
-            echo "  $0 -CU -D1 -T6    # Region CU, DNS Datos 1, Timeout 6s"
-            echo "  $0 -US -W2 -T1    # Region US, DNS WiFi 2, Timeout 1s"
-            echo "  $0 -EU -D1 -T4    # Region EU, DNS Datos 1, Timeout 4s"
-            echo "  $0 -CA -W1 -T3    # Region CA, DNS WiFi 1, Timeout 3s"
-            echo "  $0                # Modo interactivo (menu)"
+            echo "  $0 -CU -D1 -T6     # Region CU, DNS Datos 1, Timeout 6s"
+            echo "  $0 -CU2 -D1 -T6    # Region CU2, DNS Datos 1, Timeout 6s"
+            echo "  $0 -US -W2 -T1     # Region US, DNS WiFi 2, Timeout 1s"
+            echo "  $0 -EU -D1 -T4     # Region EU, DNS Datos 1, Timeout 4s"
+            echo "  $0 -CA -W1 -T3     # Region CA, DNS WiFi 1, Timeout 3s"
+            echo "  $0                 # Modo interactivo (menu)"
             exit 1
             ;;
     esac
@@ -191,12 +200,12 @@ done
 
 # Validaciones
 if [ "$MODO_AUTO" = true ] && [ -z "$IP" ]; then
-    echo -e "${ROJO}Error: Debes especificar tanto la region (-CU, -US, -EU o -CA) como el DNS (-D1, -D2, -W1, etc.)${NC}"
+    echo -e "${ROJO}Error: Debes especificar tanto la region (-CU, -CU2, -US, -EU o -CA) como el DNS (-D1, -D2, -W1, etc.)${NC}"
     exit 1
 fi
 
 if [ -n "$IP" ] && [ "$MODO_AUTO" = false ]; then
-    echo -e "${ROJO}Error: Debes especificar la region (-CU, -US, -EU o -CA) junto con el DNS${NC}"
+    echo -e "${ROJO}Error: Debes especificar la region (-CU, -CU2, -US, -EU o -CA) junto con el DNS${NC}"
     exit 1
 fi
 
@@ -506,11 +515,15 @@ trap cleanup SIGINT SIGTERM
 if [ "$MODO_AUTO" = false ]; then
     sleep 0.5
 
-    menu_flechas "Que region desea?" "CU (Cuba)" "US (Estados Unidos)" "EU (Europa)" "CA (Canada)"
+    menu_flechas "Que region desea?" "CU (Cuba)" "CU2 (Cuba 2)" "US (Estados Unidos)" "EU (Europa)" "CA (Canada)"
     case "$SELECCION_GLOBAL" in
         "CU (Cuba)")
             REGION="CU"
             DOMAIN="$CU"
+            ;;
+        "CU2 (Cuba 2)")
+            REGION="CU2"
+            DOMAIN="$CU2"
             ;;
         "US (Estados Unidos)")
             REGION="US"

@@ -1,12 +1,24 @@
 #!/bin/bash
 
-# Variables globales 
-CU='dns.devfastfreecuone.work.gd'
-CU2='dns.devfastfreecu.work.gd'
-US='dns.devfastfreeusone.work.gd'
-EU='dns.devfastfreeeu.linkpc.net'
-CA='dns.devfastfreeca.linkpc.net'
+# ============================================================
+# CONFIGURACIÓN DE REGIONES
+# Solo agrega/quita/comenta aquí para habilitar/deshabilitar
+# Formato: ["CÓDIGO"]="dominio|Nombre Descriptivo"
+# ============================================================
+declare -A REGIONES=(
+    ["CU"]="dns.devfastfreecu.work.gd|Cuba"
+    #["CU"]="dns.devfastfreecuone.work.gd|Cuba"
+    #["US"]="dns.devfastfreeusone.work.gd|Estados Unidos"
+    #["EU"]="dns.devfastfreeeu.linkpc.net|Europa"
+    #["CA"]="dns.devfastfreeca.linkpc.net|Canada"
+    # ["JP"]="dns.devfastfreejp.example.com|Japon"  # Descomentando esto se agrega automáticamente
+    # ["BR"]="dns.devfastfreebr.example.com|Brasil"
+    # ["MX"]="dns.devfastfreemx.example.com|Mexico"
+)
 
+# ============================================================
+# CONFIGURACIÓN DE DNS
+# ============================================================
 D1='200.55.128.130'
 D2='200.55.128.140'
 D3='200.55.128.230'
@@ -38,7 +50,7 @@ BLANCO='\033[1;37m'
 GRIS='\033[0;90m'
 NC='\033[0m'
 
-# Símbolos Unicode (sin emojis gráficos)
+# Símbolos Unicode
 SYM_CHECK="✓"
 SYM_ERROR="✗"
 SYM_INFO="ℹ"
@@ -74,167 +86,112 @@ imprimir_mensaje() {
     echo -e "${color}${simbolo} ${mensaje}${NC}"
 }
 
-# === PARSEO DE ARGUMENTOS ===
+# === FUNCIÓN PARA GENERAR AYUDA DINÁMICA ===
+mostrar_ayuda() {
+    echo ""
+    echo "Uso: $0 [OPCIONES]"
+    echo ""
+    echo "Regiones disponibles:"
+    for codigo in "${!REGIONES[@]}" | sort; do
+        IFS='|' read -r dominio nombre <<< "${REGIONES[$codigo]}"
+        printf "  -%-6s %s\n" "$codigo" "$nombre"
+    done | sort
+    echo ""
+    echo "DNS disponibles:"
+    echo "  -D1, -D2, -D3, -D4    DNS para datos móviles"
+    echo "  -W1, -W2, -W3, -W4    DNS para WiFi"
+    echo ""
+    echo "Timeouts disponibles:"
+    echo "  -T1, -T2, -T3, -T4, -T5, -T6    (1-6 segundos)"
+    echo ""
+    echo "Ejemplos:"
+    local primer_codigo=$(echo "${!REGIONES[@]}" | tr ' ' '\n' | sort | head -1)
+    echo "  $0 -$primer_codigo -D1 -T6     # Modo automático"
+    echo "  $0                     # Modo interactivo (menú)"
+    echo ""
+    exit 1
+}
+
+# === PARSEO DE ARGUMENTOS DINÁMICO ===
 
 MODO_AUTO=false
 DOMAIN=""
 IP=""
 REGION=""
-TIMEOUT_RAW_BYTES=6  # Valor por defecto
+TIMEOUT_RAW_BYTES=6
 
 while [[ $# -gt 0 ]]; do
     case ${1^^} in
-        -CU)
-            REGION="CU"
-            DOMAIN="$CU"
-            MODO_AUTO=true
-            shift
+        -H|--HELP)
+            mostrar_ayuda
             ;;
-        -CU2)
-            REGION="CU2"
-            DOMAIN="$CU2"
-            MODO_AUTO=true
-            shift
-            ;;
-        -US)
-            REGION="US"
-            DOMAIN="$US"
-            MODO_AUTO=true
-            shift
-            ;;
-        -EU)
-            REGION="EU"
-            DOMAIN="$EU"
-            MODO_AUTO=true
-            shift
-            ;;
-        -CA)
-            REGION="CA"
-            DOMAIN="$CA"
-            MODO_AUTO=true
-            shift
-            ;;
-        -D1)
-            IP="$D1"
-            shift
-            ;;
-        -D2)
-            IP="$D2"
-            shift
-            ;;
-        -D3)
-            IP="$D3"
-            shift
-            ;;
-        -D4)
-            IP="$D4"
-            shift
-            ;;
-        -W1)
-            IP="$W1"
-            shift
-            ;;
-        -W2)
-            IP="$W2"
-            shift
-            ;;
-        -W3)
-            IP="$W3"
-            shift
-            ;;
-        -W4)
-            IP="$W4"
-            shift
-            ;;
-        -T1)
-            TIMEOUT_RAW_BYTES=1
-            shift
-            ;;
-        -T2)
-            TIMEOUT_RAW_BYTES=2
-            shift
-            ;;
-        -T3)
-            TIMEOUT_RAW_BYTES=3
-            shift
-            ;;
-        -T4)
-            TIMEOUT_RAW_BYTES=4
-            shift
-            ;;
-        -T5)
-            TIMEOUT_RAW_BYTES=5
-            shift
-            ;;
-        -T6)
-            TIMEOUT_RAW_BYTES=6
-            shift
-            ;;
+        -D1) IP="$D1"; shift ;;
+        -D2) IP="$D2"; shift ;;
+        -D3) IP="$D3"; shift ;;
+        -D4) IP="$D4"; shift ;;
+        -W1) IP="$W1"; shift ;;
+        -W2) IP="$W2"; shift ;;
+        -W3) IP="$W3"; shift ;;
+        -W4) IP="$W4"; shift ;;
+        -T1) TIMEOUT_RAW_BYTES=1; shift ;;
+        -T2) TIMEOUT_RAW_BYTES=2; shift ;;
+        -T3) TIMEOUT_RAW_BYTES=3; shift ;;
+        -T4) TIMEOUT_RAW_BYTES=4; shift ;;
+        -T5) TIMEOUT_RAW_BYTES=5; shift ;;
+        -T6) TIMEOUT_RAW_BYTES=6; shift ;;
         -T*)
-            echo -e "${ROJO}Error: Timeout invalido. Use -T1, -T2, -T3, -T4, -T5 o -T6${NC}"
+            echo -e "${ROJO}Error: Timeout inválido. Use -T1 a -T6${NC}"
             exit 1
             ;;
         *)
-            echo -e "${ROJO}Flag desconocido: $1${NC}"
-            echo ""
-            echo "Uso: $0 [-CU|-CU2|-US|-EU|-CA] [-D1|-D2|-D3|-D4|-W1|-W2|-W3|-W4] [-T1|-T2|-T3|-T4|-T5|-T6]"
-            echo ""
-            echo "Regiones disponibles:"
-            echo "  -CU    Cuba"
-            echo "  -CU2   Cuba 2"
-            echo "  -US    Estados Unidos"
-            echo "  -EU    Europa"
-            echo "  -CA    Canada"
-            echo ""
-            echo "Ejemplos:"
-            echo "  $0 -CU -D1 -T6     # Region CU, DNS Datos 1, Timeout 6s"
-            echo "  $0 -CU2 -D1 -T6    # Region CU2, DNS Datos 1, Timeout 6s"
-            echo "  $0 -US -W2 -T1     # Region US, DNS WiFi 2, Timeout 1s"
-            echo "  $0 -EU -D1 -T4     # Region EU, DNS Datos 1, Timeout 4s"
-            echo "  $0 -CA -W1 -T3     # Region CA, DNS WiFi 1, Timeout 3s"
-            echo "  $0                 # Modo interactivo (menu)"
-            exit 1
+            # Verificar si es una región válida
+            REGION_CODE="${1#-}"  # Quitar el guión
+            REGION_CODE="${REGION_CODE^^}"  # Convertir a mayúsculas
+            
+            if [[ -n "${REGIONES[$REGION_CODE]}" ]]; then
+                REGION="$REGION_CODE"
+                IFS='|' read -r DOMAIN nombre <<< "${REGIONES[$REGION_CODE]}"
+                MODO_AUTO=true
+                shift
+            else
+                echo -e "${ROJO}Flag desconocido: $1${NC}"
+                mostrar_ayuda
+            fi
             ;;
     esac
 done
 
 # Validaciones
 if [ "$MODO_AUTO" = true ] && [ -z "$IP" ]; then
-    echo -e "${ROJO}Error: Debes especificar tanto la region (-CU, -CU2, -US, -EU o -CA) como el DNS (-D1, -D2, -W1, etc.)${NC}"
-    exit 1
+    echo -e "${ROJO}Error: Debes especificar tanto la región como el DNS${NC}"
+    mostrar_ayuda
 fi
 
 if [ -n "$IP" ] && [ "$MODO_AUTO" = false ]; then
-    echo -e "${ROJO}Error: Debes especificar la region (-CU, -CU2, -US, -EU o -CA) junto con el DNS${NC}"
-    exit 1
+    echo -e "${ROJO}Error: Debes especificar la región junto con el DNS${NC}"
+    mostrar_ayuda
 fi
 
 # === VERIFICAR BROTLI (silencioso) ===
-
 if [ ! -x "/data/data/com.termux/files/usr/bin/brotli" ]; then
     yes | pkg install -y brotli >/dev/null 2>&1
 fi
 
 # === DETECTAR ARQUITECTURA Y DESCARGAR SLIPSTREAM ===
-
-# Detectar si es 32 o 64 bits
 ARCH=$(uname -m)
 case "$ARCH" in
     x86_64|aarch64|arm64)
-        # Arquitectura de 64 bits
         SLIP_URL="https://raw.githubusercontent.com/UserZero075/DownFast/main/slipstream-clientX64"
         BITS="64"
         ;;
     i686|i386|armv7l|armv8l|arm)
-        # Arquitectura de 32 bits
         SLIP_URL="https://raw.githubusercontent.com/UserZero075/DownFast/main/slipstream-clientX32"
         BITS="32"
         ;;
     *)
-        # Por defecto usar 64 bits
         SLIP_URL="https://raw.githubusercontent.com/UserZero075/DownFast/main/slipstream-clientX64"
         BITS="64 (auto)"
-        imprimir_mensaje "WARN" "$AMARILLO" "Arquitectura desconocida ($ARCH), usando version 64 bits"
+        imprimir_mensaje "WARN" "$AMARILLO" "Arquitectura desconocida ($ARCH), usando versión 64 bits"
         ;;
 esac
 
@@ -243,9 +200,6 @@ if [ ! -f "slipstream-client" ]; then
     curl -sL -o slipstream-client "$SLIP_URL"
     chmod +x slipstream-client
     imprimir_mensaje "OK" "$VERDE" "Descarga completada"
-else
-    # Verificar si la versión existente es la correcta
-    :
 fi
 
 chmod +x slipstream-client 2>/dev/null
@@ -438,10 +392,8 @@ calcular_espera_hasta_05() {
     segundo=$((10#$segundo))
     
     if [ "$segundo" -lt 5 ]; then
-        # Estamos antes del :05 de este minuto, esperar lo que falta
         echo $((5 - segundo))
     else
-        # Ya pasó :05, esperar hasta :05 del próximo minuto
         echo $((65 - segundo))
     fi
 }
@@ -515,33 +467,24 @@ trap cleanup SIGINT SIGTERM
 if [ "$MODO_AUTO" = false ]; then
     sleep 0.5
 
-    menu_flechas "Que region desea?" "CU (Cuba)" "CU2 (Cuba 2)" "US (Estados Unidos)" "EU (Europa)" "CA (Canada)"
-    case "$SELECCION_GLOBAL" in
-        "CU (Cuba)")
-            REGION="CU"
-            DOMAIN="$CU"
-            ;;
-        "CU2 (Cuba 2)")
-            REGION="CU2"
-            DOMAIN="$CU2"
-            ;;
-        "US (Estados Unidos)")
-            REGION="US"
-            DOMAIN="$US"
-            ;;
-        "EU (Europa)")
-            REGION="EU"
-            DOMAIN="$EU"
-            ;;
-        "CA (Canada)")
-            REGION="CA"
-            DOMAIN="$CA"
-            ;;
-    esac
+    # Generar opciones dinámicamente desde el array REGIONES
+    opciones_menu=()
+    codigos_ordenados=($(echo "${!REGIONES[@]}" | tr ' ' '\n' | sort))
+    
+    for codigo in "${codigos_ordenados[@]}"; do
+        IFS='|' read -r dominio nombre <<< "${REGIONES[$codigo]}"
+        opciones_menu+=("$codigo ($nombre)")
+    done
 
-    menu_flechas "Tipo de conexion?" "Datos moviles" "WiFi"
+    menu_flechas "¿Qué región desea?" "${opciones_menu[@]}"
+    
+    # Extraer código de región de la selección
+    REGION=$(echo "$SELECCION_GLOBAL" | grep -oP '^[A-Z0-9]+')
+    IFS='|' read -r DOMAIN nombre <<< "${REGIONES[$REGION]}"
+
+    menu_flechas "Tipo de conexión?" "Datos móviles" "WiFi"
     TIPO_RED="$SELECCION_GLOBAL"
-    if [ "$TIPO_RED" = "Datos moviles" ]; then
+    if [ "$TIPO_RED" = "Datos móviles" ]; then
         menu_flechas "IP del resolver?" "$D1" "$D2" "$D3" "$D4"
     else
         menu_flechas "IP del resolver?" "$W1" "$W2" "$W3" "$W4"
@@ -560,16 +503,17 @@ if [ "$MODO_AUTO" = false ]; then
     esac
 fi
 
+# Obtener el nombre descriptivo de la región para mostrar
+IFS='|' read -r _ REGION_NOMBRE <<< "${REGIONES[$REGION]}"
+
 # === CREAR ARCHIVO DE LOG ===
 
 mkdir -p "$LOG_DIR" 2>/dev/null
 PIPE_PATH="$LOG_DIR/slipstream.log"
 RETRY_SIGNAL_FILE="$LOG_DIR/slipstream_retry_$$"
 
-# Guardar timeout en archivo para que el watchdog lo lea
 echo "$TIMEOUT_RAW_BYTES" > "$TIMEOUT_CONFIG_FILE"
 
-# Limpiar log anterior
 > "$PIPE_PATH"
 
 # ===================================================================
@@ -579,16 +523,16 @@ echo "$TIMEOUT_RAW_BYTES" > "$TIMEOUT_CONFIG_FILE"
 clear
 echo ""
 echo -e "${MAGENTA}+===============================================+${NC}"
-echo -e "${MAGENTA}|${NC}  ${BLANCO}${SYM_ROCKET} SLIPSTREAM DEVFAST ${MAGENTA}v2.1${NC}         ${MAGENTA}|${NC}"
+echo -e "${MAGENTA}|${NC}  ${BLANCO}${SYM_ROCKET} SLIPSTREAM DEVFAST ${MAGENTA}v2.2${NC}         ${MAGENTA}|${NC}"
 echo -e "${MAGENTA}+===============================================+${NC}"
 echo ""
-echo -e "${CYAN}${SYM_CONFIG} Configuracion:${NC}"
-echo -e "  ${GRIS}+-${NC} ${BLANCO}Region:${NC}   ${VERDE}$REGION${NC}"
+echo -e "${CYAN}${SYM_CONFIG} Configuración:${NC}"
+echo -e "  ${GRIS}+-${NC} ${BLANCO}Región:${NC}   ${VERDE}$REGION${NC} ${GRIS}($REGION_NOMBRE)${NC}"
 echo -e "  ${GRIS}|-${NC} ${BLANCO}Dominio:${NC}  ${CYAN}$DOMAIN${NC}"
 echo -e "  ${GRIS}|-${NC} ${BLANCO}Resolver:${NC} ${AMARILLO}$IP${NC}"
 echo -e "  ${GRIS}|-${NC} ${BLANCO}Timeout:${NC}  ${MAGENTA}${TIMEOUT_RAW_BYTES}s${NC}"
 if [ "$MODO_AUTO" = true ]; then
-    echo -e "  ${GRIS}+-${NC} ${BLANCO}Modo:${NC}     ${AMARILLO}Automatico${NC}"
+    echo -e "  ${GRIS}+-${NC} ${BLANCO}Modo:${NC}     ${AMARILLO}Automático${NC}"
 else
     echo -e "  ${GRIS}+-${NC} ${BLANCO}Modo:${NC}     ${VERDE}Interactivo${NC}"
 fi
@@ -629,14 +573,14 @@ else
     echo -e "  ${GRIS}|  ${NC}${VERDE}${SYM_CHECK} Sin procesos slipstream-client${NC}"
 fi
 
-echo -e "  ${GRIS}|-${NC} Buscando tails huerfanos..."
+echo -e "  ${GRIS}|-${NC} Buscando tails huérfanos..."
 TAILS_ANTES=$(pgrep -af "tail.*slipstream" 2>/dev/null | wc -l)
 if [ "$TAILS_ANTES" -gt 0 ]; then
     matar_tails_huerfanos
     ALGO_MATADO=true
     echo -e "  ${GRIS}|  ${NC}${AMARILLO}${SYM_KILL} Terminados $TAILS_ANTES tail(s)${NC}"
 else
-    echo -e "  ${GRIS}|  ${NC}${VERDE}${SYM_CHECK} Sin tails huerfanos${NC}"
+    echo -e "  ${GRIS}|  ${NC}${VERDE}${SYM_CHECK} Sin tails huérfanos${NC}"
 fi
 
 echo -e "  ${GRIS}+-${NC} Verificando puerto 5201..."
@@ -665,7 +609,7 @@ if [ -n "$PROCESOS_SLIP" ]; then
     done <<< "$PROCESOS_SLIP"
     echo -e "${MAGENTA}+---------------------------------${NC}"
     echo ""
-    echo -e "${ROJO}${SYM_WARN} ADVERTENCIA: Aun hay procesos activos.${NC}"
+    echo -e "${ROJO}${SYM_WARN} ADVERTENCIA: Aún hay procesos activos.${NC}"
     echo -e "${AMARILLO}   Considera forzar el cierre de Termux si hay problemas.${NC}"
 else
     echo -e "${VERDE}${SYM_CHECK} Sin procesos zombies - Sistema limpio${NC}"
@@ -712,7 +656,7 @@ iniciar_watchdog() {
                 
                 if [ "$TIEMPO_SIN_RAW" -gt "$CURRENT_TIMEOUT" ]; then
                     TIEMPO_FORMATEADO=$(formatear_tiempo "$TIEMPO_SIN_RAW")
-                    echo -e "${ROJO}${SYM_DEAD} [$(date '+%H:%M:%S')] Tunel caido, sin conexion hace ${TIEMPO_FORMATEADO}, reiniciando...${NC}"
+                    echo -e "${ROJO}${SYM_DEAD} [$(date '+%H:%M:%S')] Túnel caído, sin conexión hace ${TIEMPO_FORMATEADO}, reiniciando...${NC}"
                     
                     echo "RESTART_NEEDED" > "$RAW_BYTE_TRIGGER_RESTART"
                     
@@ -724,7 +668,7 @@ iniciar_watchdog() {
                 
                 if [ "$((AHORA - ULTIMO_STATUS_TS))" -ge "$STATUS_INTERVAL" ]; then
                     TIEMPO_FORMATEADO=$(formatear_tiempo "$TIEMPO_SIN_RAW")
-                    echo -e "${VERDE}${SYM_PULSE} [$(date '+%H:%M:%S')] Tunel operativo, ultima conexion hace ${TIEMPO_FORMATEADO}${NC}"
+                    echo -e "${VERDE}${SYM_PULSE} [$(date '+%H:%M:%S')] Túnel operativo, última conexión hace ${TIEMPO_FORMATEADO}${NC}"
                     ULTIMO_STATUS_TS=$AHORA
                 fi
             fi
@@ -739,25 +683,21 @@ iniciar_watchdog() {
 # === FUNCIÓN PARA DETENER SLIPSTREAM Y MONITOR ===
 
 detener_slipstream() {
-    # Detener monitoreo de raw bytes
     rm -f "$RAW_BYTE_MONITOR_FLAG"
     rm -f "$RAW_BYTE_TS_FILE"
     rm -f "$RAW_BYTE_TRIGGER_RESTART"
     rm -f "$ACCEPT_ERROR_TRIGGER"
     
-    # Detener monitor de logs
     if [ -n "$MONITOR_PID" ] && kill -0 "$MONITOR_PID" 2>/dev/null; then
         kill "$MONITOR_PID" 2>/dev/null
         wait "$MONITOR_PID" 2>/dev/null
     fi
     
-    # Detener slipstream
     if [ -n "$SLIP_PID" ] && kill -0 "$SLIP_PID" 2>/dev/null; then
         kill "$SLIP_PID" 2>/dev/null
         wait "$SLIP_PID" 2>/dev/null
     fi
     
-    # Limpiar señales
     > "$RETRY_SIGNAL_FILE" 2>/dev/null
 }
 
@@ -766,14 +706,12 @@ detener_slipstream() {
 iniciar_slipstream() {
     local tmp_log="$1"
     
-    # Reiniciar flags de monitoreo
     rm -f "$RAW_BYTE_TS_FILE"
     rm -f "$RAW_BYTE_MONITOR_FLAG"
     rm -f "$RAW_BYTE_TRIGGER_RESTART"
     rm -f "$ACCEPT_ERROR_TRIGGER"
     > "$RETRY_SIGNAL_FILE" 2>/dev/null
     
-    # Iniciar slipstream-client en background
     stdbuf -oL -eL ./slipstream-client \
         --tcp-listen-port=5201 \
         --resolver="${IP}:53" \
@@ -783,26 +721,21 @@ iniciar_slipstream() {
     
     SLIP_PID=$!
     
-    # Monitor de logs
     tail -f -n +1 "$tmp_log" 2>/dev/null | while IFS= read -r line; do
         echo "$line" >> "$PIPE_PATH"
         
-        # === PRIORIDAD MÁXIMA: Detectar "accept() failed: Permission denied" ===
         if [[ "$line" =~ "accept() failed: Permission denied" ]]; then
             echo "ACCEPT_ERROR" > "$ACCEPT_ERROR_TRIGGER"
         fi
         
-        # Detectar "Connection confirmed"
         if [[ "$line" == "Connection confirmed." ]]; then
             echo "CONFIRMED" > "$RETRY_SIGNAL_FILE"
         fi
         
-        # Detectar "Connection closed"
         if [[ "$line" == "Connection closed." ]]; then
             echo "CLOSED" >> "$RETRY_SIGNAL_FILE"
         fi
         
-        # Detectar raw bytes
         if [[ "$line" =~ raw[[:space:]]bytes: ]]; then
             TIMESTAMP=$(date +%s)
             echo "$TIMESTAMP" > "$RAW_BYTE_TS_FILE"
@@ -812,7 +745,6 @@ iniciar_slipstream() {
             fi
         fi
         
-        # Mostrar solo logs no-debug
         if ! es_log_debug "$line"; then
             colorizar_linea "$line"
         fi
@@ -826,15 +758,13 @@ iniciar_watchdog
 
 # === LOOP PRINCIPAL ===
 
-CHECK_EVERY=0.5  # Reducido de 1 a 0.5 para detección más rápida
+CHECK_EVERY=0.5
 RETRY_DELAY=5
 TMP_LOG="$LOG_DIR/slipstream_temp_$$.log"
 
 while true; do
-    # Resetear contador de reintentos al iniciar nuevo ciclo
     RETRY_COUNT=0
     
-    # Limpiar archivos temporales
     > "$TMP_LOG"
     > "$RETRY_SIGNAL_FILE"
     
@@ -843,10 +773,8 @@ while true; do
 
     iniciar_slipstream "$TMP_LOG"
 
-    # Loop de monitoreo
     while true; do
         
-        # === PRIORIDAD 1: VERIFICAR ERROR DE ACCEPT() (MÁXIMA PRIORIDAD) ===
         if [ -f "$ACCEPT_ERROR_TRIGGER" ]; then
             rm -f "$ACCEPT_ERROR_TRIGGER"
             
@@ -867,7 +795,6 @@ while true; do
             continue
         fi
         
-        # === PRIORIDAD 2: VERIFICAR TÚNEL CAÍDO (RAW BYTES) ===
         if [ -f "$RAW_BYTE_TRIGGER_RESTART" ] && grep -q "RESTART_NEEDED" "$RAW_BYTE_TRIGGER_RESTART" 2>/dev/null; then
             rm -f "$RAW_BYTE_TRIGGER_RESTART"
             
@@ -879,21 +806,19 @@ while true; do
             RETRY_COUNT=0
             
             iniciar_slipstream "$TMP_LOG"
-            echo -e "${VERDE}${SYM_LINK} [$(date '+%H:%M:%S')] Reinicio por tunel caido completado${NC}"
+            echo -e "${VERDE}${SYM_LINK} [$(date '+%H:%M:%S')] Reinicio por túnel caído completado${NC}"
             echo ""
             
             continue
         fi
         
-        # === PRIORIDAD 3: VERIFICAR "CONNECTION CLOSED" ===
         if [ -f "$RETRY_SIGNAL_FILE" ] && grep -q "CLOSED" "$RETRY_SIGNAL_FILE" 2>/dev/null; then
-            # Limpiar la señal
             > "$RETRY_SIGNAL_FILE"
             
             if [ "$RETRY_COUNT" -lt "$MAX_RETRIES" ]; then
                 RETRY_COUNT=$((RETRY_COUNT + 1))
                 echo ""
-                echo -e "${AMARILLO}${SYM_WARN} [$(date '+%H:%M:%S')] Conexion cerrada. Esperando ${RETRY_DELAY}s antes de reintentar... (${RETRY_COUNT}/${MAX_RETRIES})${NC}"
+                echo -e "${AMARILLO}${SYM_WARN} [$(date '+%H:%M:%S')] Conexión cerrada. Esperando ${RETRY_DELAY}s antes de reintentar... (${RETRY_COUNT}/${MAX_RETRIES})${NC}"
                 
                 detener_slipstream
                 
@@ -906,25 +831,23 @@ while true; do
                 echo ""
                 
             else
-                # Se alcanzó el máximo de reintentos, esperar hasta :05
                 echo ""
                 
                 espera_05=$(calcular_espera_hasta_05)
                 
-                echo -e "${ROJO}${SYM_ERROR} [$(date '+%H:%M:%S')] Maximo de reintentos alcanzado (${MAX_RETRIES})${NC}"
-                echo -e "${AMARILLO}${SYM_WAIT} Esperando ${BLANCO}${espera_05}s${AMARILLO} para reconectar automaticamente...${NC}"
+                echo -e "${ROJO}${SYM_ERROR} [$(date '+%H:%M:%S')] Máximo de reintentos alcanzado (${MAX_RETRIES})${NC}"
+                echo -e "${AMARILLO}${SYM_WAIT} Esperando ${BLANCO}${espera_05}s${AMARILLO} para reconectar automáticamente...${NC}"
                 
                 detener_slipstream
                 
                 sleep "$espera_05"
                 
-                # Resetear todo para nuevo ciclo
                 RETRY_COUNT=0
                 > "$TMP_LOG"
                 > "$RETRY_SIGNAL_FILE"
                 
                 echo ""
-                echo -e "${VERDE}${SYM_ROCKET} [$(date '+%H:%M:%S')] Reconectando automaticamente...${NC}"
+                echo -e "${VERDE}${SYM_ROCKET} [$(date '+%H:%M:%S')] Reconectando automáticamente...${NC}"
                 echo ""
                 
                 iniciar_slipstream "$TMP_LOG"
@@ -933,18 +856,15 @@ while true; do
             continue
         fi
         
-        # === RESETEAR CONTADOR SI HAY CONEXIÓN CONFIRMADA ===
         if [ -f "$RETRY_SIGNAL_FILE" ] && grep -q "CONFIRMED" "$RETRY_SIGNAL_FILE" 2>/dev/null; then
             RETRY_COUNT=0
             > "$RETRY_SIGNAL_FILE"
         fi
         
-        # === PRIORIDAD 4: VERIFICAR SI SLIPSTREAM CRASHEÓ ===
         if ! kill -0 "$SLIP_PID" 2>/dev/null; then
-            # Verificar que no sea por un CLOSED que ya estamos manejando
             if [ ! -f "$RETRY_SIGNAL_FILE" ] || ! grep -q "CLOSED" "$RETRY_SIGNAL_FILE" 2>/dev/null; then
                 echo ""
-                echo -e "${ROJO}${SYM_SKULL} [$(date '+%H:%M:%S')] slipstream-client crasheo. Reconectando...${NC}"
+                echo -e "${ROJO}${SYM_SKULL} [$(date '+%H:%M:%S')] slipstream-client crasheó. Reconectando...${NC}"
                 
                 detener_slipstream
                 
@@ -955,7 +875,7 @@ while true; do
 
                 iniciar_slipstream "$TMP_LOG"
                 
-                echo -e "${VERDE}${SYM_LINK} [$(date '+%H:%M:%S')] Reconexion por crash iniciada (PID: $SLIP_PID)${NC}"
+                echo -e "${VERDE}${SYM_LINK} [$(date '+%H:%M:%S')] Reconexión por crash iniciada (PID: $SLIP_PID)${NC}"
                 echo ""
             fi
         fi

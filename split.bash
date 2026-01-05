@@ -3,7 +3,7 @@
 # Variables globales -.
 CU='dns.devfastfreecuone.work.gd'
 CU2='dns.devfastfreecu.work.gd'
-US='dns.devfastfreeus.linkpc.net'
+US='dns.devfastfreeusone.work.gd'
 EU='dns.devfastfreeeu.linkpc.net'
 CA='dns.devfastfreeca.linkpc.net'
 

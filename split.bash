@@ -579,7 +579,7 @@ echo "$TIMEOUT_RAW_BYTES" > "$TIMEOUT_CONFIG_FILE"
 clear
 echo ""
 echo -e "${MAGENTA}+===============================================+${NC}"
-echo -e "${MAGENTA}|${NC}  ${BLANCO}${SYM_ROCKET} SLIPSTREAM DEVFAST ${MAGENTA}v2.0${NC}         ${MAGENTA}|${NC}"
+echo -e "${MAGENTA}|${NC}  ${BLANCO}${SYM_ROCKET} SLIPSTREAM DEVFAST ${MAGENTA}v2.1${NC}         ${MAGENTA}|${NC}"
 echo -e "${MAGENTA}+===============================================+${NC}"
 echo ""
 echo -e "${CYAN}${SYM_CONFIG} Configuracion:${NC}"

@@ -92,10 +92,10 @@ mostrar_ayuda() {
     echo "Uso: $0 [OPCIONES]"
     echo ""
     echo "Regiones disponibles:"
-    for codigo in "${!REGIONES[@]}" | sort; do
+    for codigo in $(echo "${!REGIONES[@]}" | tr ' ' '\n' | sort); do
         IFS='|' read -r dominio nombre <<< "${REGIONES[$codigo]}"
         printf "  -%-6s %s\n" "$codigo" "$nombre"
-    done | sort
+    done
     echo ""
     echo "DNS disponibles:"
     echo "  -D1, -D2, -D3, -D4    DNS para datos móviles"

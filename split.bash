@@ -8,7 +8,7 @@
 declare -A REGIONES=(
     ["CU"]="dns.devfastfreecu.work.gd|Cuba"
     #["CU"]="dns.devfastfreecuone.work.gd|Cuba"
-    ["US"]="dns.devfastfreeus.work.gd|Estados Unidos"
+    #["US"]="dns.devfastfreeus.work.gd|Estados Unidos"
     #["EU"]="dns.devfastfreeeu.linkpc.net|Europa"
     #["CA"]="dns.devfastfreeca.linkpc.net|Canada"
     # ["JP"]="dns.devfastfreejp.example.com|Japon"  # Descomentando esto se agrega automáticamente

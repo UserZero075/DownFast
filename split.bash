@@ -6,7 +6,7 @@
 # Formato: ["CÓDIGO"]="dominio|Nombre Descriptivo"
 # ============================================================
 declare -A REGIONES=(
-    ["CU"]="dns.devfastfreecu.work.gd|Cuba" #t1 190.
+    ["CU"]="dns.dfcu.2bd.net|Cuba" #t1 190.
     ["US"]="dns.devfastfreeushk.jo3.org|Estados Unidos" #Hakeroto
 )
 

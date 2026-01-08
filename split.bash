@@ -2,7 +2,6 @@
 
 # ============================================================
 # CONFIGURACIÓN DE REGIONES
-# Solo agrega/quita/comenta aquí para habilitar/deshabilitar
 # Formato: ["CÓDIGO"]="dominio|Nombre Descriptivo"
 # ============================================================
 declare -A REGIONES=(

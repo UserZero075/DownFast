@@ -19,6 +19,74 @@ imprimir_mensaje() {
     echo -e "${2}[${1}] ${3}${NC}"
 }
 
+# ======================================================
+# Función para liberar el puerto 7568
+# ======================================================
+liberar_puerto() {
+    local PUERTO=7568
+    imprimir_mensaje "INFO" "$AMARILLO" "Verificando si el puerto $PUERTO está en uso..."
+
+    # Método 1: Usando lsof
+    if command -v lsof &> /dev/null; then
+        PIDS=$(lsof -t -i :$PUERTO 2>/dev/null)
+        if [ -n "$PIDS" ]; then
+            imprimir_mensaje "INFO" "$AMARILLO" "Matando procesos en puerto $PUERTO (PIDs: $PIDS)..."
+            for PID in $PIDS; do
+                kill -9 "$PID" 2>/dev/null
+                imprimir_mensaje "INFO" "$VERDE" "Proceso $PID terminado."
+            done
+            sleep 1
+            return
+        fi
+    fi
+
+    # Método 2: Usando fuser (alternativa)
+    if command -v fuser &> /dev/null; then
+        PIDS=$(fuser $PUERTO/tcp 2>/dev/null)
+        if [ -n "$PIDS" ]; then
+            imprimir_mensaje "INFO" "$AMARILLO" "Matando procesos en puerto $PUERTO con fuser..."
+            fuser -k $PUERTO/tcp 2>/dev/null
+            sleep 1
+            return
+        fi
+    fi
+
+    # Método 3: Usando ss + grep (compatible con Termux)
+    if command -v ss &> /dev/null; then
+        PIDS=$(ss -tlnp 2>/dev/null | grep ":$PUERTO " | grep -oP 'pid=\K[0-9]+')
+        if [ -n "$PIDS" ]; then
+            imprimir_mensaje "INFO" "$AMARILLO" "Matando procesos en puerto $PUERTO con ss..."
+            for PID in $PIDS; do
+                kill -9 "$PID" 2>/dev/null
+                imprimir_mensaje "INFO" "$VERDE" "Proceso $PID terminado."
+            done
+            sleep 1
+            return
+        fi
+    fi
+
+    # Método 4: Usando netstat (última opción)
+    if command -v netstat &> /dev/null; then
+        PIDS=$(netstat -tlnp 2>/dev/null | grep ":$PUERTO " | awk '{print $7}' | cut -d'/' -f1 | grep -v '-')
+        if [ -n "$PIDS" ]; then
+            imprimir_mensaje "INFO" "$AMARILLO" "Matando procesos en puerto $PUERTO con netstat..."
+            for PID in $PIDS; do
+                kill -9 "$PID" 2>/dev/null
+                imprimir_mensaje "INFO" "$VERDE" "Proceso $PID terminado."
+            done
+            sleep 1
+            return
+        fi
+    fi
+
+    imprimir_mensaje "INFO" "$VERDE" "El puerto $PUERTO está libre."
+}
+
+# ======================================================
+# LIBERAR PUERTO 7568 ANTES DE CUALQUIER COSA
+# ======================================================
+liberar_puerto
+
 # Función para instalar wget
 instalar_wget() {
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando wget..."
@@ -55,7 +123,6 @@ instalar_python3() {
 if ! command -v wget &> /dev/null; then
     instalar_wget
 fi
-
 
 # Verificar e instalar Python3 si es necesario
 if ! command -v python3 &> /dev/null; then

@@ -23,63 +23,31 @@ imprimir_mensaje() {
 # Función para liberar el puerto 7568
 # ======================================================
 liberar_puerto() {
-    local PUERTO=7568
-    imprimir_mensaje "INFO" "$AMARILLO" "Verificando si el puerto $PUERTO está en uso..."
+    imprimir_mensaje "INFO" "$AMARILLO" "Verificando procesos en el puerto 7568..."
 
-    # Método 1: Usando lsof
-    if command -v lsof &> /dev/null; then
-        PIDS=$(lsof -t -i :$PUERTO 2>/dev/null)
-        if [ -n "$PIDS" ]; then
-            imprimir_mensaje "INFO" "$AMARILLO" "Matando procesos en puerto $PUERTO (PIDs: $PIDS)..."
-            for PID in $PIDS; do
-                kill -9 "$PID" 2>/dev/null
-                imprimir_mensaje "INFO" "$VERDE" "Proceso $PID terminado."
-            done
-            sleep 1
-            return
-        fi
+    # Buscar PIDs de python3 main.py
+    PIDS=$(ps aux 2>/dev/null | grep '[p]ython3 main.py' | awk '{print $2}')
+
+    # Si ps aux no funciona, intentar con ps -ef
+    if [ -z "$PIDS" ]; then
+        PIDS=$(ps -ef 2>/dev/null | grep '[p]ython3 main.py' | awk '{print $2}')
     fi
 
-    # Método 2: Usando fuser (alternativa)
-    if command -v fuser &> /dev/null; then
-        PIDS=$(fuser $PUERTO/tcp 2>/dev/null)
-        if [ -n "$PIDS" ]; then
-            imprimir_mensaje "INFO" "$AMARILLO" "Matando procesos en puerto $PUERTO con fuser..."
-            fuser -k $PUERTO/tcp 2>/dev/null
-            sleep 1
-            return
-        fi
+    # Si aún no funciona, intentar con ps simple
+    if [ -z "$PIDS" ]; then
+        PIDS=$(ps 2>/dev/null | grep '[p]ython3' | awk '{print $1}')
     fi
 
-    # Método 3: Usando ss + grep (compatible con Termux)
-    if command -v ss &> /dev/null; then
-        PIDS=$(ss -tlnp 2>/dev/null | grep ":$PUERTO " | grep -oP 'pid=\K[0-9]+')
-        if [ -n "$PIDS" ]; then
-            imprimir_mensaje "INFO" "$AMARILLO" "Matando procesos en puerto $PUERTO con ss..."
-            for PID in $PIDS; do
-                kill -9 "$PID" 2>/dev/null
-                imprimir_mensaje "INFO" "$VERDE" "Proceso $PID terminado."
-            done
-            sleep 1
-            return
-        fi
+    if [ -n "$PIDS" ]; then
+        for PID in $PIDS; do
+            imprimir_mensaje "INFO" "$AMARILLO" "Matando proceso python3 (PID: $PID)..."
+            kill -9 "$PID" 2>/dev/null
+        done
+        sleep 1
+        imprimir_mensaje "INFO" "$VERDE" "Puerto 7568 liberado."
+    else
+        imprimir_mensaje "INFO" "$VERDE" "No hay procesos usando el puerto 7568."
     fi
-
-    # Método 4: Usando netstat (última opción)
-    if command -v netstat &> /dev/null; then
-        PIDS=$(netstat -tlnp 2>/dev/null | grep ":$PUERTO " | awk '{print $7}' | cut -d'/' -f1 | grep -v '-')
-        if [ -n "$PIDS" ]; then
-            imprimir_mensaje "INFO" "$AMARILLO" "Matando procesos en puerto $PUERTO con netstat..."
-            for PID in $PIDS; do
-                kill -9 "$PID" 2>/dev/null
-                imprimir_mensaje "INFO" "$VERDE" "Proceso $PID terminado."
-            done
-            sleep 1
-            return
-        fi
-    fi
-
-    imprimir_mensaje "INFO" "$VERDE" "El puerto $PUERTO está libre."
 }
 
 # ======================================================

@@ -19,6 +19,42 @@ imprimir_mensaje() {
     echo -e "${2}[${1}] ${3}${NC}"
 }
 
+# ======================================================
+# Función para liberar el puerto 7568
+# ======================================================
+liberar_puerto() {
+    imprimir_mensaje "INFO" "$AMARILLO" "Verificando procesos en el puerto 7568..."
+
+    # Buscar PIDs de python3 main.py
+    PIDS=$(ps aux 2>/dev/null | grep '[p]ython3 main.py' | awk '{print $2}')
+
+    # Si ps aux no funciona, intentar con ps -ef
+    if [ -z "$PIDS" ]; then
+        PIDS=$(ps -ef 2>/dev/null | grep '[p]ython3 main.py' | awk '{print $2}')
+    fi
+
+    # Si aún no funciona, intentar con ps simple
+    if [ -z "$PIDS" ]; then
+        PIDS=$(ps 2>/dev/null | grep '[p]ython3' | awk '{print $1}')
+    fi
+
+    if [ -n "$PIDS" ]; then
+        for PID in $PIDS; do
+            imprimir_mensaje "INFO" "$AMARILLO" "Matando proceso python3 (PID: $PID)..."
+            kill -9 "$PID" 2>/dev/null
+        done
+        sleep 1
+        imprimir_mensaje "INFO" "$VERDE" "Puerto 7568 liberado."
+    else
+        imprimir_mensaje "INFO" "$VERDE" "No hay procesos usando el puerto 7568."
+    fi
+}
+
+# ======================================================
+# LIBERAR PUERTO 7568 ANTES DE CUALQUIER COSA
+# ======================================================
+liberar_puerto
+
 # Función para instalar wget
 instalar_wget() {
     imprimir_mensaje "INFO" "$AMARILLO" "Instalando wget..."
@@ -55,7 +91,6 @@ instalar_python3() {
 if ! command -v wget &> /dev/null; then
     instalar_wget
 fi
-
 
 # Verificar e instalar Python3 si es necesario
 if ! command -v python3 &> /dev/null; then

@@ -14,7 +14,7 @@ VERDE='\033[0;32m'
 AMARILLO='\033[0;33m'
 NC='\033[0m' # Sin Color
 
-# Función para imprimir mensajes con formato
+# Función para imprimir mensajes con formato //
 imprimir_mensaje() {
     echo -e "${2}[${1}] ${3}${NC}"
 }
